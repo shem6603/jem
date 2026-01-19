@@ -8,8 +8,12 @@ from .models import Item, BundleType, Customer, Order, OrderItem
 
 
 def home(request):
-    """Home page - redirects to dashboard"""
-    return redirect('core:dashboard')
+    """Customer-facing home page"""
+    bundle_types = BundleType.objects.filter(is_active=True)
+    context = {
+        'bundle_types': bundle_types,
+    }
+    return render(request, 'core/home.html', context)
 
 
 def dashboard(request):
