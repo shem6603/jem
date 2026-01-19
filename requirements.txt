@@ -1,0 +1,12 @@
+Django>=4.2,<5.0
+python-dotenv>=1.0.0
+gunicorn>=20.1.0
+whitenoise>=6.5.0
+Pillow>=10.0.0
+
+# Database drivers (install based on your database choice)
+# For MySQL/MariaDB (GoDaddy uses MySQL/MariaDB):
+mysqlclient>=2.1.0
+# For PostgreSQL (alternative):
+# psycopg2-binary>=2.9.0
+# SQLite is included with Python (for local development only)

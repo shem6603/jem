@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}New Order - Step 2: Snacks{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Progress Indicator -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-green-500 text-white font-bold">✓</div>
+                <span class="ml-2 font-medium text-gray-500">Bundle Selected</span>
+            </div>
+            <div class="flex-1 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-orange-500 text-white font-bold">2</div>
+                <span class="ml-2 font-medium text-gray-900">Select Snacks</span>
+            </div>
+            <div class="flex-1 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-300 text-gray-600 font-bold">3</div>
+                <span class="ml-2 text-gray-500">Juices</span>
+            </div>
+            <div class="flex-1 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-300 text-gray-600 font-bold">4</div>
+                <span class="ml-2 text-gray-500">Review</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg shadow-lg p-6 text-white mb-6">
+        <h1 class="text-3xl font-bold mb-2">Select Snacks</h1>
+        <p class="text-yellow-100">Choose exactly <strong>{{ required_count }}</strong> snacks for your {{ bundle_type.name }}</p>
+    </div>
+
+    <!-- Selection Counter -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6 border-l-4 border-yellow-500">
+        <div class="flex items-center justify-between">
+            <span class="text-gray-700 font-medium">Selected: <span id="selected-count" class="font-bold text-orange-600">0</span> / {{ required_count }}</span>
+            {% if required_count > 0 %}
+            <span class="text-sm text-gray-500">You need to select {{ required_count }} more</span>
+            {% else %}
+            <span class="text-sm text-green-600 font-medium">✓ Selection complete!</span>
+            {% endif %}
+        </div>
+        <div class="mt-2 w-full bg-gray-200 rounded-full h-2">
+            <div id="progress-bar" class="bg-yellow-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Snacks Grid -->
+    <form method="post" id="snacks-form">
+        {% csrf_token %}
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+            {% for snack in snacks %}
+            <label class="relative">
+                <input type="checkbox" name="snacks" value="{{ snack.id }}" class="peer hidden snack-checkbox" 
+                       {% if snack.current_stock <= 0 %}disabled{% endif %}>
+                <div class="border-2 border-gray-300 rounded-lg p-4 cursor-pointer hover:border-yellow-500 transition 
+                            peer-checked:border-yellow-500 peer-checked:bg-yellow-50
+                            {% if snack.current_stock <= 0 %}opacity-50 cursor-not-allowed bg-gray-100{% endif %}">
+                    {% if snack.image %}
+                    <img src="{{ snack.image.url }}" alt="{{ snack.name }}" class="w-full h-32 object-cover rounded mb-2">
+                    {% else %}
+                    <div class="w-full h-32 bg-gray-200 rounded mb-2 flex items-center justify-center">
+                        <span class="text-gray-400 text-2xl">{{ snack.name|first|upper }}</span>
+                    </div>
+                    {% endif %}
+                    <h3 class="font-bold text-gray-900 mb-1">{{ snack.name }}</h3>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600">${{ snack.sell_price|floatformat:2 }}</span>
+                        {% if snack.is_spicy %}
+                        <span class="text-red-600">🌶️</span>
+                        {% endif %}
+                    </div>
+                    {% if snack.current_stock <= 0 %}
+                    <div class="mt-2 p-1 bg-red-100 text-red-800 text-xs font-medium rounded text-center">
+                        Out of Stock
+                    </div>
+                    {% elif snack.is_low_stock %}
+                    <div class="mt-2 p-1 bg-orange-100 text-orange-800 text-xs font-medium rounded text-center">
+                        Low Stock ({{ snack.current_stock }})
+                    </div>
+                    {% else %}
+                    <div class="mt-2 p-1 bg-green-100 text-green-800 text-xs font-medium rounded text-center">
+                        In Stock ({{ snack.current_stock }})
+                    </div>
+                    {% endif %}
+                </div>
+            </label>
+            {% empty %}
+            <div class="col-span-full text-center py-8 text-gray-500">
+                <p>No snacks available. Please add snacks to inventory.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="flex justify-end space-x-4">
+            <a href="{% url 'core:bundle_builder' %}" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
+                ← Back
+            </a>
+            <button type="submit" id="submit-btn" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Continue to Juices →
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const checkboxes = document.querySelectorAll('.snack-checkbox');
+    const selectedCount = document.getElementById('selected-count');
+    const progressBar = document.getElementById('progress-bar');
+    const submitBtn = document.getElementById('submit-btn');
+    const requiredCount = {{ required_count }};
+
+    function updateCounter() {
+        const checked = document.querySelectorAll('.snack-checkbox:checked').length;
+        selectedCount.textContent = checked;
+        const percentage = (checked / requiredCount) * 100;
+        progressBar.style.width = Math.min(percentage, 100) + '%';
+        
+        if (checked === requiredCount) {
+            submitBtn.disabled = false;
+            progressBar.classList.remove('bg-yellow-500');
+            progressBar.classList.add('bg-green-500');
+        } else {
+            submitBtn.disabled = true;
+            progressBar.classList.remove('bg-green-500');
+            progressBar.classList.add('bg-yellow-500');
+        }
+    }
+
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateCounter);
+    });
+
+    // Validate on form submit
+    document.getElementById('snacks-form').addEventListener('submit', function(e) {
+        const checked = document.querySelectorAll('.snack-checkbox:checked').length;
+        if (checked !== requiredCount) {
+            e.preventDefault();
+            alert(`Please select exactly ${requiredCount} snacks. You selected ${checked}.`);
+        }
+    });
+
+    updateCounter();
+</script>
+{% endblock %}

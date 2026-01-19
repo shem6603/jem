@@ -1,0 +1,19 @@
+# Apache configuration for GoDaddy
+# This file helps serve static files and redirects to passenger_wsgi.py
+
+# Enable Rewrite Engine
+RewriteEngine On
+
+# Don't rewrite files or directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Rewrite everything else to passenger_wsgi.py
+RewriteRule ^(.*)$ passenger_wsgi.py/$1 [L]
+
+# Serve static files directly
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+</IfModule>
