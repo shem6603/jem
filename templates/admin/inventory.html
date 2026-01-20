@@ -1,0 +1,189 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Inventory - J.E.M Admin{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex justify-between items-center">
+    <div>
+        <h1 class="text-3xl font-black text-gray-900 mb-2">🍟 Inventory</h1>
+        <p class="text-gray-600">Manage your snacks and juices inventory</p>
+    </div>
+    <a href="{% url 'admin_add_item' %}" class="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-lg hover:shadow-lg transition transform hover:scale-105 flex items-center space-x-2">
+        <span>+</span>
+        <span>Add Item</span>
+    </a>
+</div>
+
+<!-- Tabs -->
+<div class="mb-6 border-b border-gray-200">
+    <div class="flex space-x-8">
+        <button onclick="showSection('snacks')" id="snacks-tab" class="tab-button py-4 px-1 border-b-2 border-orange-500 font-semibold text-orange-600">
+            🍟 Snacks ({{ snacks.count }})
+        </button>
+        <button onclick="showSection('juices')" id="juices-tab" class="tab-button py-4 px-1 border-b-2 border-transparent font-semibold text-gray-500 hover:text-gray-700">
+            🧃 Juices ({{ juices.count }})
+        </button>
+    </div>
+</div>
+
+<!-- Snacks Section -->
+<div id="snacks-section" class="section-content">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-yellow-50">
+            <h2 class="text-xl font-bold text-gray-900">🍟 Snacks Inventory</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cost per Unit</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Units Remaining</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for snack in snacks %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                {% if snack.image %}
+                                <img src="{{ snack.image.url }}" alt="{{ snack.name }}" class="w-10 h-10 rounded-lg object-cover mr-3" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-3" style="display: none;">
+                                    <span class="text-lg">🍟</span>
+                                </div>
+                                {% else %}
+                                <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                                    <span class="text-lg">🍟</span>
+                                </div>
+                                {% endif %}
+                                <span class="font-medium text-gray-900">{{ snack.name }}</span>
+                                {% if snack.is_spicy %}<span class="ml-2 text-red-600">🌶️</span>{% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${{ snack.cost_price|floatformat:2 }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-3 py-1 text-sm font-semibold rounded-full {% if snack.current_stock == 0 %}bg-red-100 text-red-800{% elif snack.current_stock < 5 %}bg-orange-100 text-orange-800{% else %}bg-green-100 text-green-800{% endif %}">
+                                {{ snack.current_stock }} units
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if snack.current_stock == 0 %}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Out of Stock</span>
+                            {% elif snack.current_stock < 5 %}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">Low Stock</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">In Stock</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="{% url 'admin_edit_item' snack.id %}" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition">
+                                Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                            <div class="text-6xl mb-4">🍟</div>
+                            <p>No snacks in inventory</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Juices Section -->
+<div id="juices-section" class="section-content hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-blue-50">
+            <h2 class="text-xl font-bold text-gray-900">🧃 Juices Inventory</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cost per Unit</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Units Remaining</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for juice in juices %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                {% if juice.image %}
+                                <img src="{{ juice.image.url }}" alt="{{ juice.name }}" class="w-10 h-10 rounded-lg object-cover mr-3" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3" style="display: none;">
+                                    <span class="text-lg">🧃</span>
+                                </div>
+                                {% else %}
+                                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                    <span class="text-lg">🧃</span>
+                                </div>
+                                {% endif %}
+                                <span class="font-medium text-gray-900">{{ juice.name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${{ juice.cost_price|floatformat:2 }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-3 py-1 text-sm font-semibold rounded-full {% if juice.current_stock == 0 %}bg-red-100 text-red-800{% elif juice.current_stock < 5 %}bg-orange-100 text-orange-800{% else %}bg-green-100 text-green-800{% endif %}">
+                                {{ juice.current_stock }} units
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if juice.current_stock == 0 %}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Out of Stock</span>
+                            {% elif juice.current_stock < 5 %}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">Low Stock</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">In Stock</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="{% url 'admin_edit_item' juice.id %}" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition">
+                                Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                            <div class="text-6xl mb-4">🧃</div>
+                            <p>No juices in inventory</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function showSection(section) {
+    // Hide all sections
+    document.querySelectorAll('.section-content').forEach(el => el.classList.add('hidden'));
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('border-orange-500', 'text-orange-600');
+        btn.classList.add('border-transparent', 'text-gray-500');
+    });
+    
+    // Show selected section
+    document.getElementById(section + '-section').classList.remove('hidden');
+    
+    // Activate selected tab
+    const tab = document.getElementById(section + '-tab');
+    tab.classList.remove('border-transparent', 'text-gray-500');
+    tab.classList.add('border-orange-500', 'text-orange-600');
+}
+</script>
+{% endblock %}

@@ -17,6 +17,13 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Try to use PyMySQL as fallback if mysqlclient is not available
+try:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+except ImportError:
+    pass
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -80,25 +87,42 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# Use MySQL/MariaDB for production (GoDaddy)
-# Fall back to SQLite for local development if DB credentials not provided
-if os.getenv('DB_NAME'):
+# Use MySQL/MariaDB for GoDaddy database
+# Set these in your .env file to connect to GoDaddy database
+DB_NAME = os.getenv('DB_NAME', '')
+DB_USER = os.getenv('DB_USER', '')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '3306')
+
+# Always use MySQL if credentials are provided, otherwise use SQLite
+if DB_NAME and DB_USER and DB_PASSWORD:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.getenv('DB_NAME', 'jem_customer'),
-            'USER': os.getenv('DB_USER', 'jem_auto'),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '3306'),
+            'NAME': DB_NAME,
+            'USER': DB_USER,
+            'PASSWORD': DB_PASSWORD,
+            'HOST': DB_HOST,
+            'PORT': DB_PORT,
             'OPTIONS': {
                 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
                 'charset': 'utf8mb4',
             },
+            # Connection timeout settings
+            'CONN_MAX_AGE': 0,  # Don't persist connections (helps with connection issues)
         }
     }
+    # Warn if using localhost (won't work for remote connections)
+    if DB_HOST == 'localhost':
+        import warnings
+        warnings.warn(
+            "DB_HOST is set to 'localhost'. This won't work for remote database connections. "
+            "Update DB_HOST in your .env file with the actual GoDaddy database hostname.",
+            UserWarning
+        )
 else:
-    # SQLite for local development
+    # SQLite for local development (only if no DB credentials provided)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -107,23 +131,7 @@ else:
     }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+# Password validation (moved to bottom for better organization)
 
 
 # Internationalization
@@ -146,7 +154,12 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # WhiteNoise configuration for static files
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Use CompressedStaticFilesStorage instead of Manifest to avoid missing file errors
+# Run 'python manage.py collectstatic' after deployment
+if DEBUG:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # Media files
 MEDIA_URL = '/media/'
@@ -167,3 +180,33 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# Session security
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_SAVE_EVERY_REQUEST = True  # Extend session on activity
+
+# Password security
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+# Login URLs
+LOGIN_URL = 'admin_login'
+LOGIN_REDIRECT_URL = 'admin_dashboard'
+LOGOUT_REDIRECT_URL = 'admin_login'

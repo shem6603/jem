@@ -1,0 +1,167 @@
+{% extends 'admin/base.html' %}
+{% load static %}
+
+{% block title %}Accounting - J.E.M Admin{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-black text-gray-900 mb-2">💰 Accounting</h1>
+    <p class="text-gray-600">Track expenses and calculate remaining revenue</p>
+</div>
+
+<!-- Financial Summary -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl shadow-lg p-6 text-white">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <p class="text-blue-100 text-sm mb-1">Total Revenue</p>
+                <p class="text-3xl font-black">${{ total_revenue_from_orders|floatformat:0 }}</p>
+            </div>
+            <div class="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                <span class="text-2xl">📈</span>
+            </div>
+        </div>
+        <p class="text-blue-100 text-xs">From completed orders</p>
+    </div>
+    
+    <div class="bg-gradient-to-br from-red-500 to-pink-600 rounded-xl shadow-lg p-6 text-white">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <p class="text-red-100 text-sm mb-1">Total Expenses</p>
+                <p class="text-3xl font-black">${{ total_expenses|floatformat:0 }}</p>
+            </div>
+            <div class="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                <span class="text-2xl">💸</span>
+            </div>
+        </div>
+        <p class="text-red-100 text-xs">From uploaded receipts</p>
+    </div>
+    
+    <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <p class="text-green-100 text-sm mb-1">Remaining Revenue</p>
+                <p class="text-3xl font-black">${{ remaining_revenue|floatformat:0 }}</p>
+            </div>
+            <div class="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                <span class="text-2xl">💰</span>
+            </div>
+        </div>
+        <p class="text-green-100 text-xs">Revenue - Expenses</p>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Upload Receipt Form -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
+            <span class="mr-2">📤</span> Upload Receipt
+        </h2>
+        
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            
+            <div>
+                <label for="title" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Receipt Title <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="title" name="title" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                       placeholder="e.g., Supplier Payment - January">
+            </div>
+            
+            <div>
+                <label for="amount" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Amount (JMD) <span class="text-red-500">*</span>
+                </label>
+                <input type="number" id="amount" name="amount" step="0.01" min="0.01" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                       placeholder="0.00">
+            </div>
+            
+            <div>
+                <label for="description" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Description
+                </label>
+                <textarea id="description" name="description" rows="3"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                          placeholder="Optional description..."></textarea>
+            </div>
+            
+            <div>
+                <label for="receipt_file" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Receipt File <span class="text-red-500">*</span>
+                </label>
+                <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition">
+                    <div class="space-y-1 text-center">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <div class="flex text-sm text-gray-600">
+                            <label for="receipt_file" class="relative cursor-pointer bg-white rounded-md font-medium text-gray-900 hover:text-gray-700 focus-within:outline-none">
+                                <span>Upload a file</span>
+                                <input id="receipt_file" name="receipt_file" type="file" required accept=".pdf,.jpg,.jpeg,.png" class="sr-only">
+                            </label>
+                            <p class="pl-1">or drag and drop</p>
+                        </div>
+                        <p class="text-xs text-gray-500">PDF, PNG, JPG up to 10MB</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="submit" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-lg hover:shadow-lg transition transform hover:scale-[1.02]">
+                Upload Receipt
+            </button>
+        </form>
+    </div>
+    
+    <!-- Receipts List -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-xl font-bold text-gray-900 flex items-center">
+                <span class="mr-2">📋</span> Uploaded Receipts
+                <span class="ml-3 px-3 py-1 bg-gray-200 text-gray-700 text-sm font-semibold rounded-full">{{ receipts.count }}</span>
+            </h2>
+        </div>
+        <div class="max-h-[600px] overflow-y-auto">
+            {% if receipts %}
+            <div class="divide-y divide-gray-200">
+                {% for receipt in receipts %}
+                <div class="p-6 hover:bg-gray-50 transition">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                            <h3 class="font-semibold text-gray-900 mb-1">{{ receipt.title }}</h3>
+                            <p class="text-sm text-gray-600 mb-2">{{ receipt.description|default:"No description" }}</p>
+                            <div class="flex items-center gap-4 text-xs text-gray-500">
+                                <span>{{ receipt.created_at|date:"M d, Y" }}</span>
+                                <span>•</span>
+                                <span>Uploaded by {{ receipt.uploaded_by.get_full_name|default:receipt.uploaded_by.username }}</span>
+                            </div>
+                        </div>
+                        <div class="text-right ml-4">
+                            <p class="text-2xl font-black text-red-600">${{ receipt.amount|floatformat:0 }}</p>
+                        </div>
+                    </div>
+                    {% if receipt.receipt_file %}
+                    <a href="{{ receipt.receipt_file.url }}" target="_blank" class="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        View Receipt
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="px-6 py-12 text-center">
+                <div class="text-6xl mb-4">📄</div>
+                <p class="text-gray-600">No receipts uploaded yet</p>
+                <p class="text-sm text-gray-500 mt-2">Upload your first receipt to start tracking expenses</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Order Records - J.E.M Admin{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-black text-gray-900 mb-2">📦 Order Records</h1>
+    <p class="text-gray-600">View all orders and their financial details</p>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm text-gray-600 mb-1">Total Revenue</p>
+        <p class="text-3xl font-black text-gray-900">${{ total_revenue|floatformat:0 }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm text-gray-600 mb-1">Total Cost</p>
+        <p class="text-3xl font-black text-gray-900">${{ total_cost|floatformat:0 }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm text-gray-600 mb-1">Total Profit</p>
+        <p class="text-3xl font-black text-green-600">${{ total_profit|floatformat:0 }}</p>
+    </div>
+</div>
+
+<!-- Orders Table -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <h2 class="text-xl font-bold text-gray-900">All Orders</h2>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Order Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Customer</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Revenue</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Total Cost</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Profit</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for order in orders %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {{ order.created_at|date:"M d, Y" }}<br>
+                        <span class="text-xs text-gray-400">{{ order.created_at|date:"H:i" }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="font-semibold text-gray-900">{{ order.bundle_type.name }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {{ order.customer.name }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        ${{ order.total_revenue|floatformat:2 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        ${{ order.total_cost|floatformat:2 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                        ${{ order.net_profit|floatformat:2 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full {% if order.status == 'completed' %}bg-green-100 text-green-800{% elif order.status == 'pending' %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                            {{ order.get_status_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+                        <div class="text-6xl mb-4">📦</div>
+                        <p>No orders found</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

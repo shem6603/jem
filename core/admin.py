@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Item, BundleType, Customer, Order, OrderItem
+from .models import Item, BundleType, Customer, Order, OrderItem, Receipt
 
 
 @admin.register(Item)
@@ -78,3 +78,12 @@ class OrderAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         # Recalculate totals after saving
         obj.calculate_totals()
+
+
+@admin.register(Receipt)
+class ReceiptAdmin(admin.ModelAdmin):
+    list_display = ['title', 'amount', 'uploaded_by', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['title', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'created_at'

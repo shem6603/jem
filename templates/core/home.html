@@ -1,240 +1,575 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}J.E.M - Just Eat More | Snack Attack!{% endblock %}
+{% block title %}J.E.M - Just Eat More | Premium Snack Bundles for Kids{% endblock %}
 
 {% block extra_css %}
 <style>
-    @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
+    /* Smooth scrolling */
+    html {
+        scroll-behavior: smooth;
     }
     
+    /* Hero gradient animation */
+    .hero-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background-size: 200% 200%;
+        animation: gradientShift 8s ease infinite;
+    }
+    
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    /* Floating animation */
     @keyframes float {
         0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-15px); }
+        50% { transform: translateY(-20px); }
     }
     
-    @keyframes rotate {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-    
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-    }
-    
-    .cartoon-snack {
-        animation: bounce 2s ease-in-out infinite;
-    }
-    
-    .cartoon-juice {
+    .float-animation {
         animation: float 3s ease-in-out infinite;
     }
     
-    .cartoon-star {
-        animation: rotate 20s linear infinite;
+    .float-delay-1 { animation-delay: 0.5s; }
+    .float-delay-2 { animation-delay: 1s; }
+    .float-delay-3 { animation-delay: 1.5s; }
+    
+    /* Card hover effects */
+    .product-card {
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     
-    .cartoon-heart {
-        animation: pulse 1.5s ease-in-out infinite;
+    .product-card:hover {
+        transform: translateY(-12px) scale(1.02);
     }
     
-    .snack-attack-bubble {
-        position: relative;
-        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-        border: 4px solid #FF6B35;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    /* Pulse animation for CTA */
+    @keyframes pulse-ring {
+        0% { transform: scale(0.95); opacity: 1; }
+        50% { transform: scale(1); opacity: 0.8; }
+        100% { transform: scale(0.95); opacity: 1; }
     }
     
-    .snack-attack-bubble::before {
-        content: '';
+    .pulse-cta {
+        animation: pulse-ring 2s ease-in-out infinite;
+    }
+    
+    /* Step counter */
+    .step-number {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 800;
+    }
+    
+    /* Decorative shapes */
+    .blob-1 {
         position: absolute;
-        bottom: -20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left: 20px solid transparent;
-        border-right: 20px solid transparent;
-        border-top: 20px solid #FF6B35;
+        width: 400px;
+        height: 400px;
+        background: linear-gradient(135deg, rgba(255,107,53,0.3) 0%, rgba(255,183,3,0.3) 100%);
+        border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+        filter: blur(40px);
+        animation: blob 8s ease-in-out infinite;
     }
     
-    .bundle-card {
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .bundle-card:hover {
-        transform: translateY(-10px) scale(1.02);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    }
-    
-    .bundle-card::before {
-        content: '';
+    .blob-2 {
         position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
-        opacity: 0;
-        transition: opacity 0.3s ease;
+        width: 300px;
+        height: 300px;
+        background: linear-gradient(135deg, rgba(102,126,234,0.3) 0%, rgba(118,75,162,0.3) 100%);
+        border-radius: 40% 60% 70% 30% / 40% 70% 30% 60%;
+        filter: blur(40px);
+        animation: blob 10s ease-in-out infinite reverse;
     }
     
-    .bundle-card:hover::before {
-        opacity: 1;
+    @keyframes blob {
+        0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+        50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
     }
     
-    .comic-text {
-        font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive;
-        text-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+    /* Testimonial card */
+    .testimonial-card {
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
     }
     
-    .sound-effect {
-        font-family: 'Impact', 'Arial Black', sans-serif;
-        transform: rotate(-5deg);
-        display: inline-block;
-        text-shadow: 2px 2px 0px #000;
+    /* WhatsApp button */
+    .whatsapp-btn {
+        background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+    }
+    
+    .whatsapp-btn:hover {
+        background: linear-gradient(135deg, #128C7E 0%, #075E54 100%);
+        transform: scale(1.05);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Hero Section with Sky Background -->
-<div class="relative min-h-screen overflow-hidden" style="background: linear-gradient(to bottom, #87CEEB 0%, #FFD700 100%);">
-    <!-- Floating decorative elements -->
+<!-- ==================== HERO SECTION ==================== -->
+<section class="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-yellow-50 to-pink-50">
+    <!-- Decorative blobs -->
+    <div class="blob-1 top-20 -left-40 opacity-60"></div>
+    <div class="blob-2 bottom-20 -right-40 opacity-60"></div>
+    
+    <!-- Floating snacks decoration -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-20 left-10 text-6xl cartoon-star">⭐</div>
-        <div class="absolute top-40 right-20 text-5xl cartoon-heart">❤️</div>
-        <div class="absolute top-60 left-1/4 text-4xl">🎵</div>
-        <div class="absolute top-80 right-1/3 text-5xl cartoon-star">✨</div>
-        <div class="absolute bottom-40 left-20 text-4xl cartoon-heart">💛</div>
-        <div class="absolute bottom-60 right-10 text-6xl cartoon-star">🌟</div>
+        <div class="absolute top-20 left-10 text-6xl float-animation">🍿</div>
+        <div class="absolute top-40 right-20 text-5xl float-animation float-delay-1">🧃</div>
+        <div class="absolute bottom-40 left-20 text-5xl float-animation float-delay-2">🍪</div>
+        <div class="absolute bottom-20 right-10 text-6xl float-animation float-delay-3">🍫</div>
+        <div class="absolute top-1/3 left-1/4 text-4xl float-animation float-delay-1">🥤</div>
+        <div class="absolute top-1/2 right-1/4 text-4xl float-animation float-delay-2">🍬</div>
     </div>
     
-    <!-- Sound Effects -->
-    <div class="absolute top-32 left-1/3 text-6xl font-black text-red-600 sound-effect" style="transform: rotate(-15deg);">POW!</div>
-    <div class="absolute top-48 right-1/4 text-5xl font-black text-yellow-500 sound-effect" style="transform: rotate(10deg);">YUM!</div>
-    <div class="absolute bottom-32 left-1/4 text-5xl font-black text-blue-600 sound-effect" style="transform: rotate(-8deg);">ZOOM!</div>
-    <div class="absolute bottom-48 right-1/3 text-6xl font-black text-green-600 sound-effect" style="transform: rotate(12deg);">CRUNCH!</div>
-    
-    <!-- Main Content -->
-    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <!-- Logo Section -->
-        <div class="text-center mb-8">
-            <div class="flex items-center justify-center mb-4">
-                <div class="text-8xl font-black comic-text" style="background: linear-gradient(45deg, #FF6B35, #FFB703, #E63946, #FF6B35); background-size: 200% 200%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: gradient 3s ease infinite;">
-                    J.E.M
-                </div>
-                <div class="ml-4 text-6xl cartoon-snack">🍟</div>
-            </div>
-            <h2 class="text-4xl font-bold text-white comic-text mb-2" style="text-shadow: 3px 3px 0px rgba(0,0,0,0.3);">
-                JUST EAT MORE
-            </h2>
-        </div>
-        
-        <!-- Snack Attack Bubble -->
-        <div class="text-center mb-12">
-            <div class="snack-attack-bubble inline-block px-12 py-8 rounded-3xl mb-4">
-                <h1 class="text-6xl font-black comic-text mb-2" style="color: #1E40AF; text-shadow: 2px 2px 0px #FFD700;">
-                    SNACK ATTACK!
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div class="grid lg:grid-cols-2 gap-12 items-center">
+            <!-- Hero Content -->
+            <div class="text-center lg:text-left">
+                <span class="inline-block px-4 py-2 bg-orange-100 text-orange-600 rounded-full text-sm font-semibold mb-6">
+                    #1 Snack Bundle Service in Jamaica
+                </span>
+                
+                <h1 class="text-5xl md:text-6xl lg:text-7xl font-black text-gray-900 leading-tight mb-6">
+                    Delicious Snacks
+                    <span class="block bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 bg-clip-text text-transparent">
+                        Delivered Fresh
+                    </span>
                 </h1>
-                <p class="text-2xl font-bold text-white" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.3);">
-                    Perfect for Lunch Boxes & After School!
+                
+                <p class="text-xl text-gray-600 mb-8 max-w-lg mx-auto lg:mx-0">
+                    Premium snack bundles perfect for lunch boxes, after-school treats, and class parties. 
+                    Quality snacks your kids will love!
                 </p>
-            </div>
-        </div>
-        
-        <!-- Cartoon Characters Section -->
-        <div class="flex justify-center items-center mb-16 flex-wrap gap-8">
-            <div class="text-8xl cartoon-snack" style="animation-delay: 0s;">🍿</div>
-            <div class="text-8xl cartoon-snack" style="animation-delay: 0.3s;">🍪</div>
-            <div class="text-8xl cartoon-snack" style="animation-delay: 0.6s;">🍫</div>
-            <div class="text-8xl cartoon-juice" style="animation-delay: 0.2s;">🧃</div>
-            <div class="text-8xl cartoon-juice" style="animation-delay: 0.5s;">🥤</div>
-            <div class="text-8xl cartoon-snack" style="animation-delay: 0.1s;">🍬</div>
-        </div>
-        
-        <!-- Product Bundles -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
-            <!-- Lunch Box Starter -->
-            <div class="bundle-card bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-3xl p-8 text-center border-4 border-blue-600 shadow-2xl">
-                <div class="text-6xl mb-4">⭐</div>
-                <h3 class="text-3xl font-black text-blue-800 comic-text mb-4">LUNCH BOX STARTER</h3>
-                <p class="text-4xl font-bold text-white mb-2" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.3);">10 Snacks</p>
-                <p class="text-3xl font-black text-blue-900 mb-2">$1,000</p>
-                <p class="text-lg text-blue-800 font-bold italic">(Perfect for one week!)</p>
-                <a href="{% url 'core:bundle_builder' %}" class="mt-6 inline-block bg-blue-600 text-white font-bold px-6 py-3 rounded-full hover:bg-blue-700 transition transform hover:scale-110 shadow-lg">
-                    Order Now!
-                </a>
-            </div>
-            
-            <!-- Class Party Pack -->
-            <div class="bundle-card bg-gradient-to-br from-pink-300 to-pink-500 rounded-3xl p-8 text-center border-4 border-purple-600 shadow-2xl">
-                <div class="text-6xl mb-4">☁️</div>
-                <h3 class="text-3xl font-black text-purple-800 comic-text mb-4">CLASS PARTY PACK</h3>
-                <p class="text-4xl font-bold text-white mb-2" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.3);">25 Snacks</p>
-                <p class="text-3xl font-black text-purple-900 mb-2">$3,000</p>
-                <p class="text-lg text-purple-800 font-bold italic">(Share with friends!)</p>
-                <div class="mt-2 mb-4 text-2xl">🌈</div>
-                <a href="{% url 'core:bundle_builder' %}" class="mt-6 inline-block bg-purple-600 text-white font-bold px-6 py-3 rounded-full hover:bg-purple-700 transition transform hover:scale-110 shadow-lg">
-                    Order Now!
-                </a>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="{% url 'core:bundle_builder' %}" class="pulse-cta inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                        <span>Shop Now</span>
+                        <svg class="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                    </a>
+                    <a href="#products" class="inline-flex items-center justify-center px-8 py-4 border-2 border-gray-300 text-gray-700 font-bold text-lg rounded-full hover:border-orange-500 hover:text-orange-500 transition-all duration-300">
+                        View Bundles
+                    </a>
+                </div>
+                
+                <!-- Trust badges -->
+                <div class="mt-10 flex items-center justify-center lg:justify-start gap-8">
+                    <div class="text-center">
+                        <div class="text-3xl font-black text-gray-900">500+</div>
+                        <div class="text-sm text-gray-500">Happy Families</div>
+                    </div>
+                    <div class="w-px h-12 bg-gray-300"></div>
+                    <div class="text-center">
+                        <div class="text-3xl font-black text-gray-900">4.9</div>
+                        <div class="text-sm text-gray-500 flex items-center">
+                            <span class="text-yellow-400 mr-1">★★★★★</span>
+                        </div>
+                    </div>
+                    <div class="w-px h-12 bg-gray-300"></div>
+                    <div class="text-center">
+                        <div class="text-3xl font-black text-gray-900">24hr</div>
+                        <div class="text-sm text-gray-500">Fast Delivery</div>
+                    </div>
+                </div>
             </div>
             
-            <!-- Juice Squad -->
-            <div class="bundle-card bg-gradient-to-br from-green-400 to-green-600 rounded-3xl p-8 text-center border-4 border-blue-600 shadow-2xl">
-                <div class="text-6xl mb-4 cartoon-juice">🧃</div>
-                <h3 class="text-3xl font-black text-blue-800 comic-text mb-4">JUICE SQUAD</h3>
-                <p class="text-4xl font-bold text-white mb-2" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.3);">25 Juice</p>
-                <p class="text-3xl font-black text-blue-900 mb-2">$2,700</p>
-                <p class="text-lg text-blue-800 font-bold italic">(Stay hydrated!)</p>
-                <a href="{% url 'core:bundle_builder' %}" class="mt-6 inline-block bg-blue-600 text-white font-bold px-6 py-3 rounded-full hover:bg-blue-700 transition transform hover:scale-110 shadow-lg">
-                    Order Now!
-                </a>
-            </div>
-            
-            <!-- Mega Mix -->
-            <div class="bundle-card bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl p-8 text-center border-4 border-white shadow-2xl">
-                <div class="text-6xl mb-4">💎</div>
-                <h3 class="text-3xl font-black text-white comic-text mb-4">MEGA MIX</h3>
-                <p class="text-4xl font-bold text-white mb-2" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.3);">30 Snacks + 24 Juice</p>
-                <p class="text-3xl font-black text-yellow-300 mb-2">$5,500</p>
-                <p class="text-lg text-white font-bold italic">(Best value for families!)</p>
-                <a href="{% url 'core:bundle_builder' %}" class="mt-6 inline-block bg-yellow-400 text-blue-900 font-bold px-6 py-3 rounded-full hover:bg-yellow-300 transition transform hover:scale-110 shadow-lg">
-                    Order Now!
-                </a>
-            </div>
-        </div>
-        
-        <!-- Contact Section -->
-        <div class="bg-blue-900 text-white rounded-3xl p-8 shadow-2xl text-center">
-            <h3 class="text-3xl font-black comic-text mb-6" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.3);">
-                📱 Contact Us!
-            </h3>
-            <p class="text-2xl font-bold mb-4">
-                Mom or Dad WhatsApp: 
-                <a href="https://wa.me/18762030234" class="text-yellow-300 hover:text-yellow-100 underline">
-                    +1 (876) 203-0234
-                </a>
-            </p>
-            <div class="flex items-center justify-center gap-2 text-xl">
-                <span>🚚</span>
-                <p class="font-semibold">
-                    Free Pickup in Spanish Town | Island Wide Delivery Via Kuntford or Zip Mail
-                </p>
+            <!-- Hero Image -->
+            <div class="relative flex justify-center lg:justify-end">
+                <div class="relative">
+                    <div class="absolute inset-0 bg-gradient-to-r from-orange-400 to-yellow-400 rounded-full blur-3xl opacity-30 scale-110"></div>
+                    <img src="{% static 'images/logo.png' %}" alt="J.E.M - Just Eat More" class="relative z-10 w-full max-w-md lg:max-w-lg float-animation" style="filter: drop-shadow(0 25px 50px rgba(0,0,0,0.2));">
+                </div>
             </div>
         </div>
     </div>
-</div>
+    
+    <!-- Scroll indicator -->
+    <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+        <a href="#features" class="text-gray-400 hover:text-orange-500 transition">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
+        </a>
+    </div>
+</section>
 
-<style>
-    @keyframes gradient {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-</style>
+<!-- ==================== FEATURES SECTION ==================== -->
+<section id="features" class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <span class="inline-block px-4 py-2 bg-blue-100 text-blue-600 rounded-full text-sm font-semibold mb-4">
+                Why Choose Us
+            </span>
+            <h2 class="text-4xl md:text-5xl font-black text-gray-900 mb-4">
+                The J.E.M Difference
+            </h2>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                We're not just selling snacks, we're delivering happiness to your children
+            </p>
+        </div>
+        
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <!-- Feature 1 -->
+            <div class="group p-8 rounded-3xl bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 transition-all duration-300">
+                <div class="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">🍟</span>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-3">Quality Snacks</h3>
+                <p class="text-gray-600">Only the best brands and freshest products make it into our bundles</p>
+            </div>
+            
+            <!-- Feature 2 -->
+            <div class="group p-8 rounded-3xl bg-gradient-to-br from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 transition-all duration-300">
+                <div class="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">💰</span>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-3">Best Value</h3>
+                <p class="text-gray-600">Save up to 30% compared to buying individual snacks at retail stores</p>
+            </div>
+            
+            <!-- Feature 3 -->
+            <div class="group p-8 rounded-3xl bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 transition-all duration-300">
+                <div class="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">🚚</span>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-3">Island-Wide Delivery</h3>
+                <p class="text-gray-600">Free pickup in Spanish Town or delivery via Knutsford Express</p>
+            </div>
+            
+            <!-- Feature 4 -->
+            <div class="group p-8 rounded-3xl bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 transition-all duration-300">
+                <div class="w-16 h-16 bg-purple-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-3xl">❤️</span>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-3">Made With Love</h3>
+                <p class="text-gray-600">Each bundle is carefully packed with care for your little ones</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== PRODUCTS SECTION ==================== -->
+<section id="products" class="py-20 bg-gradient-to-b from-gray-50 to-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <span class="inline-block px-4 py-2 bg-orange-100 text-orange-600 rounded-full text-sm font-semibold mb-4">
+                Our Bundles
+            </span>
+            <h2 class="text-4xl md:text-5xl font-black text-gray-900 mb-4">
+                Choose Your Perfect Bundle
+            </h2>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                From weekly lunch box fillers to class party packs, we've got you covered
+            </p>
+        </div>
+        
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <!-- Product 1: Lunch Box Starter -->
+            <div class="product-card bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
+                <div class="relative h-48 bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+                    <span class="text-8xl">🎒</span>
+                    <div class="absolute top-4 right-4 bg-white px-3 py-1 rounded-full text-sm font-bold text-orange-600">
+                        Popular
+                    </div>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Lunch Box Starter</h3>
+                    <p class="text-gray-600 text-sm mb-4">Perfect for one week of school lunches</p>
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-semibold">10 Snacks</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-3xl font-black text-gray-900">$1,000</span>
+                            <span class="text-sm text-gray-500">JMD</span>
+                        </div>
+                        <a href="{% url 'core:bundle_builder' %}" class="px-4 py-2 bg-orange-500 text-white font-semibold rounded-full hover:bg-orange-600 transition">
+                            Order
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Product 2: Class Party Pack -->
+            <div class="product-card bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
+                <div class="relative h-48 bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center">
+                    <span class="text-8xl">🎉</span>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Class Party Pack</h3>
+                    <p class="text-gray-600 text-sm mb-4">Share the joy with the whole class</p>
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="px-3 py-1 bg-pink-100 text-pink-600 rounded-full text-xs font-semibold">25 Snacks</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-3xl font-black text-gray-900">$3,000</span>
+                            <span class="text-sm text-gray-500">JMD</span>
+                        </div>
+                        <a href="{% url 'core:bundle_builder' %}" class="px-4 py-2 bg-purple-500 text-white font-semibold rounded-full hover:bg-purple-600 transition">
+                            Order
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Product 3: Juice Squad -->
+            <div class="product-card bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
+                <div class="relative h-48 bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
+                    <span class="text-8xl">🧃</span>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Juice Squad</h3>
+                    <p class="text-gray-600 text-sm mb-4">Keep the kids hydrated and happy</p>
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="px-3 py-1 bg-green-100 text-green-600 rounded-full text-xs font-semibold">25 Juices</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-3xl font-black text-gray-900">$2,700</span>
+                            <span class="text-sm text-gray-500">JMD</span>
+                        </div>
+                        <a href="{% url 'core:bundle_builder' %}" class="px-4 py-2 bg-green-500 text-white font-semibold rounded-full hover:bg-green-600 transition">
+                            Order
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Product 4: Mega Mix -->
+            <div class="product-card bg-white rounded-3xl shadow-lg overflow-hidden border-2 border-orange-500 relative">
+                <div class="absolute top-0 left-0 right-0 bg-gradient-to-r from-orange-500 to-red-500 text-white text-center py-2 text-sm font-bold z-10">
+                    BEST VALUE
+                </div>
+                <div class="relative h-48 bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center mt-8">
+                    <span class="text-8xl">👑</span>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Mega Mix</h3>
+                    <p class="text-gray-600 text-sm mb-4">The ultimate bundle for families</p>
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-semibold">30 Snacks</span>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-semibold">24 Juices</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-3xl font-black text-gray-900">$5,500</span>
+                            <span class="text-sm text-gray-500">JMD</span>
+                        </div>
+                        <a href="{% url 'core:bundle_builder' %}" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-full hover:from-orange-600 hover:to-red-600 transition">
+                            Order
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-12">
+            <a href="{% url 'core:bundle_builder' %}" class="inline-flex items-center justify-center px-8 py-4 bg-gray-900 text-white font-bold text-lg rounded-full hover:bg-gray-800 transition-all duration-300">
+                Build Your Own Bundle
+                <svg class="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== HOW IT WORKS SECTION ==================== -->
+<section id="how-it-works" class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <span class="inline-block px-4 py-2 bg-green-100 text-green-600 rounded-full text-sm font-semibold mb-4">
+                Simple Process
+            </span>
+            <h2 class="text-4xl md:text-5xl font-black text-gray-900 mb-4">
+                How It Works
+            </h2>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                Getting your snacks is as easy as 1-2-3
+            </p>
+        </div>
+        
+        <div class="grid md:grid-cols-3 gap-8 relative">
+            <!-- Connecting line (hidden on mobile) -->
+            <div class="hidden md:block absolute top-16 left-1/4 right-1/4 h-1 bg-gradient-to-r from-orange-200 via-yellow-200 to-green-200 z-0"></div>
+            
+            <!-- Step 1 -->
+            <div class="relative z-10 text-center">
+                <div class="step-number bg-gradient-to-br from-orange-500 to-red-500 text-white mx-auto mb-6 shadow-lg">
+                    1
+                </div>
+                <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                    <div class="text-5xl mb-4">📱</div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Choose Your Bundle</h3>
+                    <p class="text-gray-600">Select from our pre-made bundles or customize your own with your favorite snacks</p>
+                </div>
+            </div>
+            
+            <!-- Step 2 -->
+            <div class="relative z-10 text-center">
+                <div class="step-number bg-gradient-to-br from-yellow-500 to-orange-500 text-white mx-auto mb-6 shadow-lg">
+                    2
+                </div>
+                <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                    <div class="text-5xl mb-4">💬</div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">WhatsApp Us</h3>
+                    <p class="text-gray-600">Send your order via WhatsApp and confirm your delivery or pickup details</p>
+                </div>
+            </div>
+            
+            <!-- Step 3 -->
+            <div class="relative z-10 text-center">
+                <div class="step-number bg-gradient-to-br from-green-500 to-teal-500 text-white mx-auto mb-6 shadow-lg">
+                    3
+                </div>
+                <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                    <div class="text-5xl mb-4">🎁</div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Receive & Enjoy</h3>
+                    <p class="text-gray-600">Get your bundle delivered or pick it up, then watch the kids enjoy!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== TESTIMONIALS SECTION ==================== -->
+<section class="py-20 bg-gradient-to-b from-gray-50 to-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <span class="inline-block px-4 py-2 bg-yellow-100 text-yellow-600 rounded-full text-sm font-semibold mb-4">
+                Customer Love
+            </span>
+            <h2 class="text-4xl md:text-5xl font-black text-gray-900 mb-4">
+                What Parents Say
+            </h2>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                Join hundreds of happy families across Jamaica
+            </p>
+        </div>
+        
+        <div class="grid md:grid-cols-3 gap-8">
+            <!-- Testimonial 1 -->
+            <div class="testimonial-card rounded-3xl p-8 shadow-lg border border-gray-100">
+                <div class="flex items-center mb-4">
+                    <div class="text-yellow-400 text-xl">★★★★★</div>
+                </div>
+                <p class="text-gray-700 mb-6 italic">"My kids look forward to their lunch boxes now! The variety is amazing and the prices can't be beat. J.E.M has made my mornings so much easier."</p>
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-gradient-to-br from-orange-400 to-pink-400 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                        SK
+                    </div>
+                    <div class="ml-4">
+                        <div class="font-bold text-gray-900">Simone K.</div>
+                        <div class="text-sm text-gray-500">Kingston, Jamaica</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Testimonial 2 -->
+            <div class="testimonial-card rounded-3xl p-8 shadow-lg border border-gray-100">
+                <div class="flex items-center mb-4">
+                    <div class="text-yellow-400 text-xl">★★★★★</div>
+                </div>
+                <p class="text-gray-700 mb-6 italic">"Ordered the Mega Mix for my daughter's birthday party - all the kids loved it! Great quality snacks and the delivery was super quick."</p>
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                        MR
+                    </div>
+                    <div class="ml-4">
+                        <div class="font-bold text-gray-900">Michelle R.</div>
+                        <div class="text-sm text-gray-500">Montego Bay, Jamaica</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Testimonial 3 -->
+            <div class="testimonial-card rounded-3xl p-8 shadow-lg border border-gray-100">
+                <div class="flex items-center mb-4">
+                    <div class="text-yellow-400 text-xl">★★★★★</div>
+                </div>
+                <p class="text-gray-700 mb-6 italic">"Best value for money! I used to spend so much at the supermarket. Now I order from J.E.M every month and save big. Highly recommend!"</p>
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-teal-400 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                        DT
+                    </div>
+                    <div class="ml-4">
+                        <div class="font-bold text-gray-900">Damion T.</div>
+                        <div class="text-sm text-gray-500">Spanish Town, Jamaica</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== CTA SECTION ==================== -->
+<section class="py-20 bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 relative overflow-hidden">
+    <!-- Decorative elements -->
+    <div class="absolute inset-0 overflow-hidden opacity-20">
+        <div class="absolute top-10 left-10 text-8xl">🍿</div>
+        <div class="absolute bottom-10 right-10 text-8xl">🧃</div>
+        <div class="absolute top-1/2 left-1/4 text-6xl">🍪</div>
+        <div class="absolute top-1/3 right-1/4 text-6xl">🍫</div>
+    </div>
+    
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        <h2 class="text-4xl md:text-5xl font-black text-white mb-6">
+            Ready to Order?
+        </h2>
+        <p class="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+            Contact us on WhatsApp for quick ordering and friendly service. We're here to help!
+        </p>
+        
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="https://wa.me/18762030234" target="_blank" class="whatsapp-btn inline-flex items-center justify-center px-8 py-4 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300">
+                <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                WhatsApp: +1 (876) 203-0234
+            </a>
+            <a href="{% url 'core:bundle_builder' %}" class="inline-flex items-center justify-center px-8 py-4 bg-white text-orange-600 font-bold text-lg rounded-full shadow-lg hover:bg-gray-100 transition-all duration-300">
+                Order Online Now
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== DELIVERY INFO SECTION ==================== -->
+<section class="py-16 bg-gray-900 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid md:grid-cols-3 gap-8 text-center">
+            <div>
+                <div class="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl">📍</span>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Free Pickup</h3>
+                <p class="text-gray-400">Available in Spanish Town. Contact us for pickup times and location.</p>
+            </div>
+            <div>
+                <div class="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl">🚚</span>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Island-Wide Delivery</h3>
+                <p class="text-gray-400">Via Knutsford Express or Zip Mail. Delivery fees apply based on location.</p>
+            </div>
+            <div>
+                <div class="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl">⏰</span>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Quick Turnaround</h3>
+                <p class="text-gray-400">Orders processed within 24 hours. Same-day pickup available!</p>
+            </div>
+        </div>
+    </div>
+</section>
 {% endblock %}

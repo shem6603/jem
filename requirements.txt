@@ -6,7 +6,9 @@ Pillow>=10.0.0
 
 # Database drivers (install based on your database choice)
 # For MySQL/MariaDB (GoDaddy uses MySQL/MariaDB):
-mysqlclient>=2.1.0
+# Try mysqlclient first, if it fails use pymysql
+# mysqlclient>=2.1.0  # Uncomment if you can install it
+pymysql>=1.1.0  # Alternative MySQL driver (works on Windows)
 # For PostgreSQL (alternative):
 # psycopg2-binary>=2.9.0
 # SQLite is included with Python (for local development only)

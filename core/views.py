@@ -1,10 +1,28 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Sum, Count, Q
 from django.views.decorators.http import require_http_methods
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
+from django.conf import settings
 from decimal import Decimal
 from .models import Item, BundleType, Customer, Order, OrderItem
+
+
+def is_staff_user(user):
+    """Check if user is staff"""
+    return user.is_authenticated and user.is_staff
+
+
+def favicon_ico(request):
+    """Handle favicon.ico requests - redirect to PNG favicon"""
+    from django.contrib.staticfiles.storage import staticfiles_storage
+    try:
+        return HttpResponseRedirect(staticfiles_storage.url('favicons/favicon.png'))
+    except:
+        # Return 204 No Content if favicon doesn't exist
+        from django.http import HttpResponse
+        return HttpResponse(status=204)
 
 
 def home(request):
@@ -54,6 +72,8 @@ def dashboard(request):
     return render(request, 'core/dashboard.html', context)
 
 
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
 def inventory(request):
     """Inventory management view"""
     items = Item.objects.all().order_by('category', 'name')
