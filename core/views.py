@@ -659,114 +659,72 @@ def bundle_builder_details(request):
         messages.error(request, 'Please include at least one item in your bundle.')
         return redirect('core:bundle_builder_select')
     
-    # Calculate for display
+    # Calculate for display using the new smart bundle algorithm
+    from .utils import generate_smart_bundle
+    
     is_custom = bundle_type == 'custom'
     
+    # Get customer favorites (starred items)
+    customer_favorites = []
+    for item in snack_items:
+        if item.id in starred_snacks:
+            customer_favorites.append(item)
+    for item in juice_items:
+        if item.id in starred_juices:
+            customer_favorites.append(item)
+    
     if is_custom:
-        # Run algorithm with customer-specified quantities
-        calc_result = calculate_custom_bundle_quantities(
-            snack_items, juice_items, starred_snacks, starred_juices,
-            required_snack_qty=custom_snack_qty,
-            required_juice_qty=custom_juice_qty
-        )
-        quantities = calc_result['quantities']
-        total_cost = calc_result['total_cost']
-        suggested_price = calc_result['suggested_price']
+        # Custom bundle - calculate suggested price based on 38% margin
+        # First, we need to estimate the price
+        bundle_config = {
+            'name': 'Custom Bundle',
+            'selling_price': Decimal('0'),  # Will be calculated
+            'snack_limit': custom_snack_qty,
+            'juice_limit': custom_juice_qty,
+            'packaging_cost': Decimal('0'),
+        }
+        
+        # Run algorithm to get cost estimate first
+        result = generate_smart_bundle(bundle_config, customer_favorites)
+        
+        # For custom, suggested_price is calculated based on cost + 38% margin
+        total_cost = result['total_cost']
+        margin_factor = Decimal('0.62')  # 1 - 0.38
+        suggested_price = (int(total_cost / margin_factor / 100) + 1) * 100
+        
+        # Re-run with the calculated price to ensure margin
+        bundle_config['selling_price'] = suggested_price
+        result = generate_smart_bundle(bundle_config, customer_favorites)
+        total_cost = result['total_cost']
+        
     else:
-        # Fixed bundle - use algorithm to ensure 38% margin with fixed price
+        # Fixed bundle - use fixed price
         requirements = BUNDLE_REQUIREMENTS[bundle_type]
         fixed_price = BUNDLE_PRICES[bundle_type]
         
-        # Calculate required quantities
-        required_snack_qty = requirements.get('snacks', 0)
-        required_juice_qty = requirements.get('juices', 0)
+        bundle_config = {
+            'name': dict(CustomerOrder.BUNDLE_TYPE_CHOICES).get(bundle_type, bundle_type),
+            'selling_price': fixed_price,
+            'snack_limit': requirements.get('snacks', 0),
+            'juice_limit': requirements.get('juices', 0),
+            'packaging_cost': Decimal('0'),
+        }
         
-        # Calculate maximum allowed cost for 38% margin with fixed price
-        # margin = (revenue - cost) / revenue
-        # 0.38 = (fixed_price - cost) / fixed_price
-        # 0.38 * fixed_price = fixed_price - cost
-        # cost = fixed_price - 0.38 * fixed_price = fixed_price * 0.62
-        max_allowed_cost = fixed_price * Decimal('0.62')
-        
-        # Run algorithm with 38% margin target
-        calc_result = calculate_custom_bundle_quantities(
-            snack_items, juice_items, starred_snacks, starred_juices,
-            required_snack_qty=required_snack_qty,
-            required_juice_qty=required_juice_qty,
-            target_margin=38
-        )
-        quantities = calc_result['quantities']
-        total_cost = calc_result['total_cost']
-        
-        # If cost exceeds max allowed, keep adjusting quantities until it fits
-        all_items_dict = {item.id: item for item in snack_items + juice_items}
-        max_iterations = 100
-        iteration = 0
-        
-        while total_cost > max_allowed_cost and iteration < max_iterations:
-            iteration += 1
-            
-            # Shift quantities from expensive to cheap items
-            all_items_list = []
-            for item_id, qty in quantities.items():
-                if qty > 0 and item_id in all_items_dict:
-                    all_items_list.append((item_id, all_items_dict[item_id], qty))
-            
-            if not all_items_list:
-                break
-            
-            # Sort by cost (cheapest first)
-            all_items_list.sort(key=lambda x: x[1].cost_price)
-            
-            # Find expensive items we can reduce
-            expensive_items = [x for x in all_items_list if x[2] > 1]
-            cheap_items = [x for x in all_items_list]
-            
-            starred_ids_set = set(starred_snacks + starred_juices)
-            
-            # Try to shift from expensive to cheap
-            shifted = False
-            for exp_item_id, exp_item, exp_qty in reversed(expensive_items):
-                if shifted:
-                    break
-                
-                # Don't reduce starred items below non-starred minimum
-                if exp_item_id in starred_ids_set:
-                    min_starred = min((qty for item_id, _, qty in all_items_list if item_id in starred_ids_set), default=0)
-                    min_non_starred = min((qty for item_id, _, qty in all_items_list if item_id not in starred_ids_set), default=0)
-                    if exp_qty <= max(min_non_starred + 1, 2):
-                        continue
-                
-                # Find cheapest item to increase
-                for cheap_item_id, cheap_item, cheap_qty in cheap_items:
-                    if cheap_item_id == exp_item_id:
-                        continue
-                    
-                    # Don't increase non-starred above starred
-                    if cheap_item_id not in starred_ids_set and exp_item_id in starred_ids_set:
-                        continue
-                    
-                    # Shift 1 unit
-                    quantities[exp_item_id] -= 1
-                    quantities[cheap_item_id] += 1
-                    shifted = True
-                    break
-            
-            if not shifted:
-                break
-            
-            # Recalculate cost
-            total_cost = sum(
-                all_items_dict[item_id].cost_price * Decimal(str(qty))
-                for item_id, qty in quantities.items()
-                if qty > 0
-            )
-        
+        # Run the smart bundle algorithm
+        result = generate_smart_bundle(bundle_config, customer_favorites)
+        total_cost = result['total_cost']
         suggested_price = fixed_price
     
+    # Convert result to quantities dict for backward compatibility
+    quantities = {}
+    for item, qty, is_fav in result['selected_snacks']:
+        quantities[item.id] = qty
+    for item, qty, is_fav in result['selected_juices']:
+        quantities[item.id] = qty
+    
     # Prepare items with quantities for display
-    snacks_with_qty = [(item, quantities.get(item.id, 0), item.id in starred_snacks) for item in snack_items if quantities.get(item.id, 0) > 0]
-    juices_with_qty = [(item, quantities.get(item.id, 0), item.id in starred_juices) for item in juice_items if quantities.get(item.id, 0) > 0]
+    snacks_with_qty = [(item, qty, is_fav) for item, qty, is_fav in result['selected_snacks'] if qty > 0]
+    juices_with_qty = [(item, qty, is_fav) for item, qty, is_fav in result['selected_juices'] if qty > 0]
     
     # Get banking info
     banking_info = BankingInfo.objects.filter(is_active=True).first()
@@ -803,28 +761,35 @@ def bundle_builder_details(request):
                 total_cost=total_cost,
             )
             
-            # Create order items
-            all_items = {item.id: item for item in snack_items + juice_items}
-            for item_id, qty in quantities.items():
-                CustomerOrderItem.objects.create(
-                    order=order,
-                    item=all_items[item_id],
-                    quantity=qty,
-                    is_starred=item_id in starred_snacks or item_id in starred_juices
-                )
+            # Create order items from the smart bundle result
+            for item, qty, is_fav in result['selected_snacks']:
+                if qty > 0:
+                    CustomerOrderItem.objects.create(
+                        order=order,
+                        item=item,
+                        quantity=qty,
+                        is_starred=is_fav
+                    )
+            for item, qty, is_fav in result['selected_juices']:
+                if qty > 0:
+                    CustomerOrderItem.objects.create(
+                        order=order,
+                        item=item,
+                        quantity=qty,
+                        is_starred=is_fav
+                    )
             
             # Calculate totals for non-custom
             if not is_custom:
                 order.total_revenue = suggested_price
-                order.net_profit = order.total_revenue - order.total_cost
-                if order.total_revenue > 0:
-                    order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                order.net_profit = result['estimated_profit']
+                order.profit_margin = result['profit_margin']
                 
                 # Validate margin is at least 38%
-                if order.profit_margin < 38:
-                    # This shouldn't happen with algorithm, but if it does, set status to pending_approval
+                if not result['success']:
+                    # Algorithm couldn't achieve target margin, set status to pending_approval
                     order.status = 'pending_approval'
-                    messages.warning(request, f'Fixed bundle cost results in {order.profit_margin:.1f}% margin. Order requires admin approval.')
+                    messages.warning(request, result['message'])
                 
                 order.save()
             

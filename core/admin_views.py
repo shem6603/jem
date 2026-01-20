@@ -1402,7 +1402,10 @@ def admin_customer_order_detail(request, order_id):
             messages.success(request, 'Item quantities updated.')
 
         elif action == 'rerun_algo':
-            # Re-run algorithm to redistribute quantities based on margin input
+            # Re-run algorithm using the new generate_smart_bundle function
+            from .utils import generate_smart_bundle
+            from .models import Item
+            
             try:
                 margin_input = Decimal(request.POST.get('target_margin', '38').strip())
             except Exception:
@@ -1413,121 +1416,75 @@ def admin_customer_order_detail(request, order_id):
             target_margin = margin_input
             request.session['admin_margin_target'] = str(margin_input)
 
-            # Build item lists from current order items
-            snack_items = []
-            juice_items = []
-            starred_snacks = []
-            starred_juices = []
+            # Calculate totals from current order
             snack_total = 0
             juice_total = 0
-
+            customer_favorites = []  # Starred items
+            
             for item in order_items:
                 if item.item.category == 'snack':
-                    snack_items.append(item.item)
                     snack_total += item.quantity
-                    if item.is_starred:
-                        starred_snacks.append(item.item.id)
                 elif item.item.category == 'juice':
-                    juice_items.append(item.item)
                     juice_total += item.quantity
-                    if item.is_starred:
-                        starred_juices.append(item.item.id)
-
-            from .views import calculate_custom_bundle_quantities
-            calc_result = calculate_custom_bundle_quantities(
-                snack_items, juice_items, starred_snacks, starred_juices,
-                required_snack_qty=snack_total,
-                required_juice_qty=juice_total,
-                target_margin=float(margin_input)
-            )
-
-            # Update quantities
-            new_quantities = calc_result.get('quantities', {})
-            for item in order_items:
-                if item.item_id in new_quantities:
-                    item.quantity = int(new_quantities[item.item_id])
-                    item.save()
-
-            # Recalculate totals
-            order.total_cost = sum(
-                item.item.cost_price * Decimal(str(item.quantity))
-                for item in order.customer_order_items.select_related('item')
-            )
+                if item.is_starred:
+                    customer_favorites.append(item.item)
             
-            # For fixed bundles, keep adjusting until margin is met
-            if order.bundle_type != 'custom' and order.total_revenue > 0:
-                # Fixed bundle - adjust until margin is at least 38%
-                max_allowed_cost = order.total_revenue * Decimal('0.62')
-                all_items_dict = {item.item.id: item.item for item in order_items}
-                max_iterations = 100
-                iteration = 0
-                
-                while order.total_cost > max_allowed_cost and iteration < max_iterations:
-                    iteration += 1
-                    
-                    # Shift from expensive to cheap
-                    all_items_list = []
-                    for item in order_items:
-                        if item.quantity > 0:
-                            all_items_list.append((item.item.id, item.item, item.quantity))
-                    
-                    if not all_items_list:
-                        break
-                    
-                    all_items_list.sort(key=lambda x: x[1].cost_price)
-                    expensive_items = [x for x in all_items_list if x[2] > 1]
-                    cheap_items = [x for x in all_items_list]
-                    starred_ids_set = set(starred_snacks + starred_juices)
-                    
-                    shifted = False
-                    for exp_item_id, exp_item, exp_qty in reversed(expensive_items):
-                        if shifted:
-                            break
-                        
-                        if exp_item_id in starred_ids_set:
-                            min_starred = min((qty for item_id, _, qty in all_items_list if item_id in starred_ids_set), default=0)
-                            min_non_starred = min((qty for item_id, _, qty in all_items_list if item_id not in starred_ids_set), default=0)
-                            if exp_qty <= max(min_non_starred + 1, 2):
-                                continue
-                        
-                        for cheap_item_id, cheap_item, cheap_qty in cheap_items:
-                            if cheap_item_id == exp_item_id:
-                                continue
-                            if cheap_item_id not in starred_ids_set and exp_item_id in starred_ids_set:
-                                continue
-                            
-                            # Find the order item and update
-                            for oi in order_items:
-                                if oi.item_id == exp_item_id:
-                                    oi.quantity -= 1
-                                    oi.save()
-                                elif oi.item_id == cheap_item_id:
-                                    oi.quantity += 1
-                                    oi.save()
-                            shifted = True
-                            break
-                    
-                    if not shifted:
-                        break
-                    
-                    # Recalculate cost
-                    order.total_cost = sum(
-                        item.item.cost_price * Decimal(str(item.quantity))
-                        for item in order.customer_order_items.select_related('item')
-                    )
-            
-            # Recalculate margin
+            # Build bundle config
+            # For fixed bundles, use the fixed revenue; for custom, calculate based on target margin
             if order.total_revenue > 0:
-                order.net_profit = order.total_revenue - order.total_cost
-                if order.total_revenue > 0:
-                    order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                selling_price = order.total_revenue
+            else:
+                # Estimate from current cost + target margin
+                current_cost = sum(oi.item.cost_price * Decimal(str(oi.quantity)) for oi in order_items)
+                selling_price = current_cost / (Decimal('1') - margin_input / Decimal('100'))
+            
+            bundle_config = {
+                'name': order.get_bundle_type_display(),
+                'selling_price': selling_price,
+                'snack_limit': snack_total,
+                'juice_limit': juice_total,
+                'packaging_cost': Decimal('0'),
+            }
+            
+            # Run the smart bundle algorithm
+            result = generate_smart_bundle(bundle_config, customer_favorites)
+            
+            # Clear existing order items and create new ones based on result
+            order.customer_order_items.all().delete()
+            
+            # Create new order items from snacks
+            for item, quantity, is_favorite in result['selected_snacks']:
+                CustomerOrderItem.objects.create(
+                    order=order,
+                    item=item,
+                    quantity=quantity,
+                    is_starred=is_favorite
+                )
+            
+            # Create new order items from juices
+            for item, quantity, is_favorite in result['selected_juices']:
+                CustomerOrderItem.objects.create(
+                    order=order,
+                    item=item,
+                    quantity=quantity,
+                    is_starred=is_favorite
+                )
+            
+            # Update order totals
+            order.total_cost = result['total_cost']
+            order.net_profit = result['estimated_profit']
+            order.profit_margin = result['profit_margin']
+            
+            # Refresh order_items for the template
+            order_items = order.customer_order_items.select_related('item')
             
             order.save()
 
-            if order.bundle_type == 'custom':
-                messages.success(request, f'Algorithm re-run with {margin_input}% margin target. Suggested price: ${calc_result.get("suggested_price", 0):.0f} JMD.')
+            # Show result message
+            if result['success']:
+                messages.success(request, f'Algorithm re-run successfully! {result["message"]} Snacks: {result["snack_count"]}, Juices: {result["juice_count"]}')
             else:
-                messages.success(request, f'Algorithm re-run with {margin_input}% margin target. Current margin: {order.profit_margin:.1f}%.')
+                messages.warning(request, result['message'])
     
     # Calculate suggested price for custom bundles (target margin)
     suggested_price = None
