@@ -1,0 +1,139 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Banking Info - J.E.M Admin{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-black text-gray-900 mb-2">Banking Information</h1>
+    <p class="text-gray-600">Manage payment account details shown to customers</p>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-8">
+    <!-- Add New -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Add New Account</h2>
+        
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Bank Name <span class="text-red-500">*</span></label>
+                <input type="text" name="bank_name" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="e.g., NCB, Scotiabank, JMMB">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Account Name <span class="text-red-500">*</span></label>
+                <input type="text" name="account_name" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="Account holder name">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Account Number <span class="text-red-500">*</span></label>
+                <input type="text" name="account_number" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="Account number">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Account Type</label>
+                    <input type="text" name="account_type"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Savings">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
+                    <input type="text" name="branch"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Spanish Town">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Additional Instructions</label>
+                <textarea name="additional_info" rows="2"
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Any additional payment instructions..."></textarea>
+            </div>
+            
+            <button type="submit" class="w-full px-4 py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition">
+                Add Banking Info
+            </button>
+        </form>
+    </div>
+    
+    <!-- Existing Accounts -->
+    <div>
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Current Accounts</h2>
+        
+        <div class="space-y-4">
+            {% for bank in banking_info %}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 {% if not bank.is_active %}opacity-60{% endif %}">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">{{ bank.bank_name }}</h3>
+                        <p class="text-sm text-gray-500">{{ bank.account_name }}</p>
+                    </div>
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full {% if bank.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {% if bank.is_active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                </div>
+                
+                <div class="space-y-2 text-sm mb-4">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Account Number:</span>
+                        <span class="font-mono font-semibold">{{ bank.account_number }}</span>
+                    </div>
+                    {% if bank.account_type %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Type:</span>
+                        <span class="font-semibold">{{ bank.account_type }}</span>
+                    </div>
+                    {% endif %}
+                    {% if bank.branch %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Branch:</span>
+                        <span class="font-semibold">{{ bank.branch }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if bank.additional_info %}
+                <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded mb-4">{{ bank.additional_info }}</p>
+                {% endif %}
+                
+                <div class="flex gap-2">
+                    <form method="post" class="flex-1">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="toggle">
+                        <input type="hidden" name="bank_id" value="{{ bank.id }}">
+                        <button type="submit" class="w-full px-3 py-2 text-sm font-semibold rounded-lg transition
+                            {% if bank.is_active %}bg-gray-200 text-gray-700 hover:bg-gray-300{% else %}bg-green-100 text-green-700 hover:bg-green-200{% endif %}">
+                            {% if bank.is_active %}Deactivate{% else %}Activate{% endif %}
+                        </button>
+                    </form>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="bank_id" value="{{ bank.id }}">
+                        <button type="submit" class="px-3 py-2 text-sm font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+                                onclick="return confirm('Delete this banking info?')">
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% empty %}
+            <div class="bg-gray-50 rounded-xl p-8 text-center">
+                <div class="text-5xl mb-4">🏦</div>
+                <p class="text-gray-500">No banking info added yet</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

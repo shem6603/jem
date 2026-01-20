@@ -39,6 +39,11 @@ urlpatterns = [
     path('admin/users/create/', admin_views.admin_create_user, name='admin_create_user'),
     path('admin/users/<int:user_id>/delete/', admin_views.admin_delete_user, name='admin_delete_user'),
     
+    # Customer order management
+    path('admin/customer-orders/', admin_views.admin_customer_orders, name='admin_customer_orders'),
+    path('admin/customer-orders/<int:order_id>/', admin_views.admin_customer_order_detail, name='admin_customer_order_detail'),
+    path('admin/banking/', admin_views.admin_banking_info, name='admin_banking_info'),
+    
     # Django default admin (must come AFTER custom routes)
     path('admin/', admin.site.urls),
     

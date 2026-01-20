@@ -1255,3 +1255,353 @@ def admin_delete_user(request, user_id):
         messages.success(request, f'User "{username}" has been deleted.')
     
     return redirect('admin_users')
+
+
+# ============================================
+# Customer Order Management
+# ============================================
+
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
+def admin_customer_orders(request):
+    """View all customer orders"""
+    from .models import CustomerOrder
+    from django.db.models import Sum
+    
+    # Filter by status
+    status_filter = request.GET.get('status', '')
+    orders = CustomerOrder.objects.all().order_by('-created_at')
+    
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+    
+    # Calculate totals
+    pending_count = CustomerOrder.objects.filter(status='pending_approval').count()
+    payment_uploaded_count = CustomerOrder.objects.filter(status='payment_uploaded').count()
+    
+    context = {
+        'orders': orders,
+        'status_filter': status_filter,
+        'pending_count': pending_count,
+        'payment_uploaded_count': payment_uploaded_count,
+        'status_choices': CustomerOrder.STATUS_CHOICES,
+    }
+    return render(request, 'admin/customer_orders.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
+@csrf_protect
+@require_http_methods(["GET", "POST"])
+def admin_customer_order_detail(request, order_id):
+    """View and manage a single customer order"""
+    from .models import CustomerOrder, CustomerOrderItem
+    
+    order = get_object_or_404(CustomerOrder, id=order_id)
+    order_items = order.customer_order_items.select_related('item')
+    target_margin = Decimal(request.session.get('admin_margin_target', '38'))
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'approve':
+            # Set price for custom bundles
+            new_price = request.POST.get('new_price', '').strip()
+            admin_notes = request.POST.get('admin_notes', '').strip()
+            
+            # Calculate minimum price for 38% margin
+            margin_factor = Decimal('0.62')  # 1 - 0.38
+            min_price = order.total_cost / margin_factor
+            
+            if order.bundle_type == 'custom' and not new_price:
+                messages.error(request, 'Please set a price for this custom bundle.')
+            else:
+                # Determine price to use
+                if new_price:
+                    try:
+                        price_decimal = Decimal(new_price)
+                    except (ValueError, InvalidOperation):
+                        messages.error(request, 'Invalid price format.')
+                        price_decimal = None
+                else:
+                    # Fixed bundle - use current revenue
+                    price_decimal = order.total_revenue
+                
+                if price_decimal:
+                    # Validate that price achieves at least 38% margin
+                    if price_decimal < min_price:
+                        messages.error(request, f'Price must be at least ${min_price:.0f} JMD to achieve 38% margin. Current price (${price_decimal:.0f}) would result in {(price_decimal - order.total_cost) / price_decimal * 100:.1f}% margin.')
+                        # Don't redirect, show error and stay on page
+                    else:
+                        order.total_revenue = price_decimal
+                        order.net_profit = order.total_revenue - order.total_cost
+                        if order.total_revenue > 0:
+                            order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                        
+                        order.status = 'approved'
+                        order.admin_notes = admin_notes
+                        order.approved_at = timezone.now()
+                        order.approved_by = request.user
+                        order.save()
+                        messages.success(request, f'Order {order.order_reference} approved with {order.profit_margin:.1f}% margin!')
+                        return redirect('admin_customer_orders')
+        
+        elif action == 'verify_payment':
+            order.status = 'payment_verified'
+            order.save()
+            messages.success(request, f'Payment for {order.order_reference} verified!')
+            return redirect('admin_customer_orders')
+        
+        elif action == 'mark_processing':
+            order.status = 'processing'
+            order.save()
+            messages.success(request, f'Order {order.order_reference} marked as processing.')
+            return redirect('admin_customer_orders')
+        
+        elif action == 'mark_completed':
+            order.status = 'completed'
+            order.save()
+            messages.success(request, f'Order {order.order_reference} completed!')
+            return redirect('admin_customer_orders')
+        
+        elif action == 'cancel':
+            order.status = 'cancelled'
+            order.admin_notes = request.POST.get('admin_notes', '')
+            order.save()
+            messages.success(request, f'Order {order.order_reference} cancelled.')
+            return redirect('admin_customer_orders')
+        
+        elif action == 'update_items':
+            # Update item quantities
+            for item in order_items:
+                qty_key = f'qty_{item.id}'
+                new_qty = request.POST.get(qty_key, '').strip()
+                if new_qty:
+                    try:
+                        item.quantity = int(new_qty)
+                        item.save()
+                    except ValueError:
+                        pass
+            
+            # Recalculate totals
+            order.total_cost = sum(
+                item.item.cost_price * Decimal(str(item.quantity))
+                for item in order.customer_order_items.select_related('item')
+            )
+            
+            # If revenue is already set, recalculate margin and warn if below 38%
+            if order.total_revenue > 0:
+                order.net_profit = order.total_revenue - order.total_cost
+                if order.total_revenue > 0:
+                    order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                    if order.profit_margin < 38:
+                        min_price = order.total_cost / Decimal('0.62')
+                        messages.warning(request, f'Current revenue results in {order.profit_margin:.1f}% margin. Minimum price for 38% margin is ${min_price:.0f} JMD.')
+            
+            order.save()
+            messages.success(request, 'Item quantities updated.')
+
+        elif action == 'rerun_algo':
+            # Re-run algorithm to redistribute quantities based on margin input
+            try:
+                margin_input = Decimal(request.POST.get('target_margin', '38').strip())
+            except Exception:
+                margin_input = Decimal('38')
+
+            if margin_input < 38:
+                margin_input = Decimal('38')
+            target_margin = margin_input
+            request.session['admin_margin_target'] = str(margin_input)
+
+            # Build item lists from current order items
+            snack_items = []
+            juice_items = []
+            starred_snacks = []
+            starred_juices = []
+            snack_total = 0
+            juice_total = 0
+
+            for item in order_items:
+                if item.item.category == 'snack':
+                    snack_items.append(item.item)
+                    snack_total += item.quantity
+                    if item.is_starred:
+                        starred_snacks.append(item.item.id)
+                elif item.item.category == 'juice':
+                    juice_items.append(item.item)
+                    juice_total += item.quantity
+                    if item.is_starred:
+                        starred_juices.append(item.item.id)
+
+            from .views import calculate_custom_bundle_quantities
+            calc_result = calculate_custom_bundle_quantities(
+                snack_items, juice_items, starred_snacks, starred_juices,
+                required_snack_qty=snack_total,
+                required_juice_qty=juice_total,
+                target_margin=float(margin_input)
+            )
+
+            # Update quantities
+            new_quantities = calc_result.get('quantities', {})
+            for item in order_items:
+                if item.item_id in new_quantities:
+                    item.quantity = int(new_quantities[item.item_id])
+                    item.save()
+
+            # Recalculate totals
+            order.total_cost = sum(
+                item.item.cost_price * Decimal(str(item.quantity))
+                for item in order.customer_order_items.select_related('item')
+            )
+            
+            # For fixed bundles, keep adjusting until margin is met
+            if order.bundle_type != 'custom' and order.total_revenue > 0:
+                # Fixed bundle - adjust until margin is at least 38%
+                max_allowed_cost = order.total_revenue * Decimal('0.62')
+                all_items_dict = {item.item.id: item.item for item in order_items}
+                max_iterations = 100
+                iteration = 0
+                
+                while order.total_cost > max_allowed_cost and iteration < max_iterations:
+                    iteration += 1
+                    
+                    # Shift from expensive to cheap
+                    all_items_list = []
+                    for item in order_items:
+                        if item.quantity > 0:
+                            all_items_list.append((item.item.id, item.item, item.quantity))
+                    
+                    if not all_items_list:
+                        break
+                    
+                    all_items_list.sort(key=lambda x: x[1].cost_price)
+                    expensive_items = [x for x in all_items_list if x[2] > 1]
+                    cheap_items = [x for x in all_items_list]
+                    starred_ids_set = set(starred_snacks + starred_juices)
+                    
+                    shifted = False
+                    for exp_item_id, exp_item, exp_qty in reversed(expensive_items):
+                        if shifted:
+                            break
+                        
+                        if exp_item_id in starred_ids_set:
+                            min_starred = min((qty for item_id, _, qty in all_items_list if item_id in starred_ids_set), default=0)
+                            min_non_starred = min((qty for item_id, _, qty in all_items_list if item_id not in starred_ids_set), default=0)
+                            if exp_qty <= max(min_non_starred + 1, 2):
+                                continue
+                        
+                        for cheap_item_id, cheap_item, cheap_qty in cheap_items:
+                            if cheap_item_id == exp_item_id:
+                                continue
+                            if cheap_item_id not in starred_ids_set and exp_item_id in starred_ids_set:
+                                continue
+                            
+                            # Find the order item and update
+                            for oi in order_items:
+                                if oi.item_id == exp_item_id:
+                                    oi.quantity -= 1
+                                    oi.save()
+                                elif oi.item_id == cheap_item_id:
+                                    oi.quantity += 1
+                                    oi.save()
+                            shifted = True
+                            break
+                    
+                    if not shifted:
+                        break
+                    
+                    # Recalculate cost
+                    order.total_cost = sum(
+                        item.item.cost_price * Decimal(str(item.quantity))
+                        for item in order.customer_order_items.select_related('item')
+                    )
+            
+            # Recalculate margin
+            if order.total_revenue > 0:
+                order.net_profit = order.total_revenue - order.total_cost
+                if order.total_revenue > 0:
+                    order.profit_margin = (order.net_profit / order.total_revenue) * 100
+            
+            order.save()
+
+            if order.bundle_type == 'custom':
+                messages.success(request, f'Algorithm re-run with {margin_input}% margin target. Suggested price: ${calc_result.get("suggested_price", 0):.0f} JMD.')
+            else:
+                messages.success(request, f'Algorithm re-run with {margin_input}% margin target. Current margin: {order.profit_margin:.1f}%.')
+    
+    # Calculate suggested price for custom bundles (target margin)
+    suggested_price = None
+    if order.bundle_type == 'custom' and order.total_cost > 0:
+        margin_factor = Decimal(str(1 - float(target_margin) / 100))
+        if margin_factor > 0:
+            suggested_price = int(order.total_cost / margin_factor / 100) * 100 + 100
+
+    suggested_profit = None
+    suggested_margin = None
+    if suggested_price and order.total_cost > 0:
+        suggested_profit = Decimal(str(suggested_price)) - order.total_cost
+        if suggested_price > 0:
+            suggested_margin = (suggested_profit / Decimal(str(suggested_price))) * 100
+    
+    context = {
+        'order': order,
+        'order_items': order_items,
+        'suggested_price': suggested_price,
+        'suggested_profit': suggested_profit,
+        'suggested_margin': suggested_margin,
+        'target_margin': target_margin,
+    }
+    return render(request, 'admin/customer_order_detail.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
+def admin_banking_info(request):
+    """Manage banking information"""
+    from .models import BankingInfo
+    
+    banking_info = BankingInfo.objects.all().order_by('bank_name')
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'add':
+            bank_name = request.POST.get('bank_name', '').strip()
+            account_name = request.POST.get('account_name', '').strip()
+            account_number = request.POST.get('account_number', '').strip()
+            account_type = request.POST.get('account_type', '').strip()
+            branch = request.POST.get('branch', '').strip()
+            additional_info = request.POST.get('additional_info', '').strip()
+            
+            if bank_name and account_name and account_number:
+                BankingInfo.objects.create(
+                    bank_name=bank_name,
+                    account_name=account_name,
+                    account_number=account_number,
+                    account_type=account_type,
+                    branch=branch,
+                    additional_info=additional_info,
+                    is_active=True
+                )
+                messages.success(request, 'Banking info added!')
+            else:
+                messages.error(request, 'Please fill in required fields.')
+        
+        elif action == 'delete':
+            bank_id = request.POST.get('bank_id')
+            BankingInfo.objects.filter(id=bank_id).delete()
+            messages.success(request, 'Banking info deleted.')
+        
+        elif action == 'toggle':
+            bank_id = request.POST.get('bank_id')
+            bank = get_object_or_404(BankingInfo, id=bank_id)
+            bank.is_active = not bank.is_active
+            bank.save()
+            messages.success(request, f'Banking info {"activated" if bank.is_active else "deactivated"}.')
+        
+        return redirect('admin_banking_info')
+    
+    context = {
+        'banking_info': banking_info,
+    }
+    return render(request, 'admin/banking_info.html', context)

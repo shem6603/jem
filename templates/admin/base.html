@@ -17,91 +17,141 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <!-- Navigation -->
-    <nav class="bg-gray-900 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-4">
-                    <a href="{% url 'admin_dashboard' %}" class="flex items-center space-x-2">
-                        <span class="text-xl font-bold">🔐 Admin Panel</span>
-                    </a>
-                    <div class="hidden md:flex items-center space-x-4">
-                        <a href="{% url 'admin_dashboard' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_dashboard' %}bg-gray-800{% endif %}">
-                            📊 Dashboard
-                        </a>
-                        <a href="{% url 'admin_order_records' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_order_records' %}bg-gray-800{% endif %}">
-                            📦 Order Records
-                        </a>
-                        <a href="{% url 'admin_inventory' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_inventory' %}bg-gray-800{% endif %}">
-                            🍟 Inventory
-                        </a>
-                        <a href="{% url 'admin_accounting' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_accounting' %}bg-gray-800{% endif %}">
-                            💰 Accounting
-                        </a>
-                        {% if user.is_superuser %}
-                        <a href="{% url 'admin_users' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_users' or request.resolver_match.url_name == 'admin_create_user' %}bg-gray-800{% endif %}">
-                            👤 Users
-                        </a>
-                        {% endif %}
-                    </div>
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="hidden md:flex md:flex-col md:w-64 bg-gray-900 text-white shadow-lg">
+            <!-- Logo/Brand -->
+            <div class="flex items-center justify-center h-16 px-4 border-b border-gray-800">
+                <a href="{% url 'admin_dashboard' %}" class="flex items-center space-x-2">
+                    <span class="text-xl font-bold">🔐 Admin Panel</span>
+                </a>
+            </div>
+            
+            <!-- Navigation Links -->
+            <nav class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+                <a href="{% url 'admin_dashboard' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_dashboard' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'admin_customer_orders' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if 'customer_order' in request.resolver_match.url_name %}bg-gray-800{% endif %}">
+                    <span class="mr-3">🛒</span>
+                    <span>Customer Orders</span>
+                </a>
+                <a href="{% url 'admin_order_records' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_order_records' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">📦</span>
+                    <span>Order Records</span>
+                </a>
+                <a href="{% url 'admin_inventory' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_inventory' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">🍟</span>
+                    <span>Inventory</span>
+                </a>
+                <a href="{% url 'admin_accounting' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_accounting' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">💰</span>
+                    <span>Accounting</span>
+                </a>
+                <a href="{% url 'admin_banking_info' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_banking_info' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">🏦</span>
+                    <span>Banking</span>
+                </a>
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_users' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_users' or request.resolver_match.url_name == 'admin_create_user' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">👤</span>
+                    <span>Users</span>
+                </a>
+                {% endif %}
+            </nav>
+            
+            <!-- User Info & Actions -->
+            <div class="px-4 py-4 border-t border-gray-800">
+                <div class="mb-3">
+                    <p class="text-xs text-gray-400 mb-1">Welcome</p>
+                    <p class="text-sm font-medium">{{ user.get_full_name|default:user.username }}</p>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <span class="hidden sm:block text-sm text-gray-300">Welcome, {{ user.get_full_name|default:user.username }}</span>
-                    <a href="{% url 'core:home' %}" class="hidden sm:block px-3 py-2 text-sm text-gray-300 hover:text-white transition" target="_blank">
-                        View Site
+                <div class="space-y-2">
+                    <a href="{% url 'core:home' %}" class="flex items-center px-4 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition" target="_blank">
+                        <span class="mr-2">🌐</span>
+                        <span>View Site</span>
                     </a>
-                    <a href="{% url 'admin_logout' %}" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-medium transition">
-                        Logout
+                    <a href="{% url 'admin_logout' %}" class="flex items-center justify-center w-full px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition">
+                        <span class="mr-2">🚪</span>
+                        <span>Logout</span>
                     </a>
-                    <!-- Mobile menu button -->
-                    <button type="button" class="md:hidden text-white hover:text-gray-300 focus:outline-none" id="mobile-menu-button">
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Top Bar (Mobile) -->
+            <div class="md:hidden bg-gray-900 text-white shadow-lg">
+                <div class="flex items-center justify-between h-16 px-4">
+                    <button type="button" class="text-white hover:text-gray-300 focus:outline-none" id="mobile-menu-button">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>
+                    <a href="{% url 'admin_dashboard' %}" class="text-lg font-bold">🔐 Admin Panel</a>
+                    <a href="{% url 'admin_logout' %}" class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-medium transition">
+                        Logout
+                    </a>
+                </div>
+                
+                <!-- Mobile menu -->
+                <div class="hidden border-t border-gray-800" id="mobile-menu">
+                    <div class="px-2 pt-2 pb-3 space-y-1">
+                        <a href="{% url 'admin_dashboard' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            📊 Dashboard
+                        </a>
+                        <a href="{% url 'admin_customer_orders' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            🛒 Customer Orders
+                        </a>
+                        <a href="{% url 'admin_order_records' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            📦 Order Records
+                        </a>
+                        <a href="{% url 'admin_inventory' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            🍟 Inventory
+                        </a>
+                        <a href="{% url 'admin_accounting' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            💰 Accounting
+                        </a>
+                        <a href="{% url 'admin_banking_info' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            🏦 Banking
+                        </a>
+                        {% if user.is_superuser %}
+                        <a href="{% url 'admin_users' %}" class="block px-3 py-2 text-white hover:bg-gray-800 rounded-md text-base font-medium">
+                            👤 Users
+                        </a>
+                        {% endif %}
+                        <div class="px-3 py-2 border-t border-gray-800 mt-2">
+                            <p class="text-sm text-gray-400 mb-1">Welcome, {{ user.get_full_name|default:user.username }}</p>
+                            <a href="{% url 'core:home' %}" class="text-sm text-gray-300 hover:text-white" target="_blank">
+                                🌐 View Site
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- Mobile menu -->
-            <div class="md:hidden hidden" id="mobile-menu">
-                <div class="px-2 pt-2 pb-3 space-y-1 bg-gray-800">
-                    <a href="{% url 'admin_dashboard' %}" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md text-base font-medium">
-                        📊 Dashboard
-                    </a>
-                    <a href="{% url 'admin_order_records' %}" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md text-base font-medium">
-                        📦 Order Records
-                    </a>
-                    <a href="{% url 'admin_inventory' %}" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md text-base font-medium">
-                        🍟 Inventory
-                    </a>
-                    <a href="{% url 'admin_accounting' %}" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md text-base font-medium">
-                        💰 Accounting
-                    </a>
-                    {% if user.is_superuser %}
-                    <a href="{% url 'admin_users' %}" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md text-base font-medium">
-                        👤 Users
-                    </a>
-                    {% endif %}
+            <!-- Scrollable Content -->
+            <main class="flex-1 overflow-y-auto">
+                <!-- Messages -->
+                {% if messages %}
+                <div class="px-4 sm:px-6 lg:px-8 pt-4">
+                    {% for message in messages %}
+                    <div class="mb-4 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-100 text-red-800 border border-red-300{% elif message.tags == 'success' %}bg-green-100 text-green-800 border border-green-300{% else %}bg-blue-100 text-blue-800 border border-blue-300{% endif %}">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
                 </div>
-            </div>
+                {% endif %}
+                
+                <!-- Page Content -->
+                <div class="px-4 sm:px-6 lg:px-8 py-8">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
         </div>
-    </nav>
-
-    <!-- Messages -->
-    {% if messages %}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        {% for message in messages %}
-        <div class="mb-4 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-100 text-red-800 border border-red-300{% elif message.tags == 'success' %}bg-green-100 text-green-800 border border-green-300{% else %}bg-blue-100 text-blue-800 border border-blue-300{% endif %}">
-            {{ message }}
-        </div>
-        {% endfor %}
     </div>
-    {% endif %}
-
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% block content %}{% endblock %}
-    </main>
 
     <script>
         // Mobile menu toggle

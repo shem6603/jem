@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Choose Your Bundle - J.E.M{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-b from-orange-50 via-white to-orange-50 py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <a href="{% url 'core:home' %}" class="inline-block mb-6">
+                <span class="text-4xl">🍟</span>
+            </a>
+            <h1 class="text-4xl md:text-5xl font-black text-gray-900 mb-4">
+                Choose Your Bundle
+            </h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                Select a bundle size to get started. You'll pick your favorite snacks and juices next!
+            </p>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="flex items-center justify-center mb-12">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
+                    <span class="ml-2 font-semibold text-orange-600">Bundle</span>
+                </div>
+                <div class="w-16 h-1 bg-gray-300"></div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">2</div>
+                    <span class="ml-2 text-gray-500">Select Items</span>
+                </div>
+                <div class="w-16 h-1 bg-gray-300"></div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">3</div>
+                    <span class="ml-2 text-gray-500">Details</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bundle Options -->
+        <form method="post" id="bundle-form">
+            {% csrf_token %}
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- 10 Snacks -->
+                <label class="bundle-card cursor-pointer">
+                    <input type="radio" name="bundle_type" value="10_snacks" class="hidden peer" required>
+                    <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 hover:border-orange-400 peer-checked:border-orange-500 peer-checked:bg-orange-50 transition-all duration-300 h-full">
+                        <div class="text-center">
+                            <div class="text-5xl mb-4">🎒</div>
+                            <h3 class="text-xl font-bold text-gray-900 mb-2">Lunch Box Starter</h3>
+                            <p class="text-gray-600 text-sm mb-4">Perfect for one week of school lunches</p>
+                            <div class="inline-block px-4 py-2 bg-orange-100 text-orange-600 rounded-full text-sm font-semibold mb-4">
+                                10 Snacks
+                            </div>
+                            <div class="text-3xl font-black text-gray-900">
+                                $1,000 <span class="text-sm text-gray-500 font-normal">JMD</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+                
+                <!-- 25 Snacks -->
+                <label class="bundle-card cursor-pointer">
+                    <input type="radio" name="bundle_type" value="25_snacks" class="hidden peer">
+                    <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 hover:border-pink-400 peer-checked:border-pink-500 peer-checked:bg-pink-50 transition-all duration-300 h-full">
+                        <div class="text-center">
+                            <div class="text-5xl mb-4">🎉</div>
+                            <h3 class="text-xl font-bold text-gray-900 mb-2">Class Party Pack</h3>
+                            <p class="text-gray-600 text-sm mb-4">Share the joy with the whole class</p>
+                            <div class="inline-block px-4 py-2 bg-pink-100 text-pink-600 rounded-full text-sm font-semibold mb-4">
+                                25 Snacks
+                            </div>
+                            <div class="text-3xl font-black text-gray-900">
+                                $3,000 <span class="text-sm text-gray-500 font-normal">JMD</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+                
+                <!-- 25 Juices -->
+                <label class="bundle-card cursor-pointer">
+                    <input type="radio" name="bundle_type" value="25_juices" class="hidden peer">
+                    <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 hover:border-green-400 peer-checked:border-green-500 peer-checked:bg-green-50 transition-all duration-300 h-full">
+                        <div class="text-center">
+                            <div class="text-5xl mb-4">🧃</div>
+                            <h3 class="text-xl font-bold text-gray-900 mb-2">Juice Squad</h3>
+                            <p class="text-gray-600 text-sm mb-4">Keep the kids hydrated and happy</p>
+                            <div class="inline-block px-4 py-2 bg-green-100 text-green-600 rounded-full text-sm font-semibold mb-4">
+                                25 Juices
+                            </div>
+                            <div class="text-3xl font-black text-gray-900">
+                                $2,700 <span class="text-sm text-gray-500 font-normal">JMD</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+                
+                <!-- Mega Mix -->
+                <label class="bundle-card cursor-pointer">
+                    <input type="radio" name="bundle_type" value="mega_mix" class="hidden peer">
+                    <div class="bg-white rounded-2xl p-6 border-2 border-orange-400 hover:border-orange-500 peer-checked:border-orange-500 peer-checked:bg-orange-50 transition-all duration-300 h-full relative">
+                        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-4 py-1 rounded-full">
+                            BEST VALUE
+                        </div>
+                        <div class="text-center pt-2">
+                            <div class="text-5xl mb-4">👑</div>
+                            <h3 class="text-xl font-bold text-gray-900 mb-2">Mega Mix</h3>
+                            <p class="text-gray-600 text-sm mb-4">The ultimate bundle for families</p>
+                            <div class="flex justify-center gap-2 mb-4">
+                                <span class="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-semibold">30 Snacks</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-semibold">24 Juices</span>
+                            </div>
+                            <div class="text-3xl font-black text-gray-900">
+                                $5,500 <span class="text-sm text-gray-500 font-normal">JMD</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+                
+                <!-- Custom Bundle -->
+                <label class="bundle-card cursor-pointer md:col-span-2 lg:col-span-2">
+                    <input type="radio" name="bundle_type" value="custom" class="hidden peer" id="custom_radio">
+                    <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 hover:border-purple-400 peer-checked:border-purple-500 peer-checked:bg-purple-50 transition-all duration-300 h-full">
+                        <div class="flex flex-col md:flex-row items-start gap-6">
+                            <div class="text-6xl">🎨</div>
+                            <div class="flex-1">
+                                <h3 class="text-xl font-bold text-gray-900 mb-2">Build Your Own Bundle</h3>
+                                <p class="text-gray-600 mb-4">Create a custom mix! Enter how many snacks and juices you want.</p>
+                                
+                                <!-- Custom Quantity Inputs -->
+                                <div id="custom-qty-inputs" class="hidden bg-purple-50 rounded-xl p-4 mb-4 border border-purple-200">
+                                    <p class="text-purple-800 text-sm font-semibold mb-3">Choose your bundle size:</p>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Snacks</label>
+                                            <input type="number" name="custom_snack_qty" id="custom_snack_qty" min="0" value="0"
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                   onclick="event.stopPropagation();">
+                                            <p class="text-xs text-gray-500 mt-1">Min: 10 (or 0 if getting juices)</p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Juices</label>
+                                            <input type="number" name="custom_juice_qty" id="custom_juice_qty" min="0" value="0"
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                   onclick="event.stopPropagation();">
+                                            <p class="text-xs text-gray-500 mt-1">Min: 10 (or 0 if getting snacks)</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 p-2 bg-yellow-100 rounded-lg">
+                                        <p class="text-yellow-800 text-xs">
+                                            <strong>Options:</strong> 10+ snacks only, 10+ juices only, or 10+ snacks AND 10+ juices
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-xs font-semibold">You choose quantity</span>
+                                    <span class="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-full text-xs font-semibold">Star your favorites</span>
+                                    <span class="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-semibold">Custom pricing</span>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-purple-600">Price TBD</div>
+                                <p class="text-xs text-gray-500">Based on your selection</p>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="text-center">
+                <button type="submit" class="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                    Continue to Select Items
+                    <svg class="inline-block ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                    </svg>
+                </button>
+            </div>
+        </form>
+        
+        <!-- Back Link -->
+        <div class="text-center mt-8">
+            <a href="{% url 'core:home' %}" class="text-gray-600 hover:text-orange-500 transition">
+                <svg class="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Home
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const customRadio = document.getElementById('custom_radio');
+    const customQtyInputs = document.getElementById('custom-qty-inputs');
+    const allRadios = document.querySelectorAll('input[name="bundle_type"]');
+    
+    // Show/hide custom inputs based on selection
+    function updateCustomInputs() {
+        if (customRadio && customRadio.checked) {
+            customQtyInputs.classList.remove('hidden');
+        } else {
+            customQtyInputs.classList.add('hidden');
+        }
+    }
+    
+    // Listen to all radio changes
+    allRadios.forEach(radio => {
+        radio.addEventListener('change', updateCustomInputs);
+    });
+    
+    // Also update on click of the custom card
+    const customCard = customRadio.closest('.bundle-card');
+    if (customCard) {
+        customCard.addEventListener('click', function() {
+            setTimeout(updateCustomInputs, 10);
+        });
+    }
+    
+    // Initial state
+    updateCustomInputs();
+});
+</script>
+{% endblock %}

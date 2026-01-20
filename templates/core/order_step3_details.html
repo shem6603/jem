@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Your Details - J.E.M{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-b from-orange-50 via-white to-orange-50 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-black text-gray-900 mb-2">
+                Complete Your Order
+            </h1>
+            <p class="text-lg text-gray-600">
+                <span class="font-semibold text-orange-600">{{ bundle_type_display }}</span>
+                {% if is_custom %}
+                <span class="text-gray-500">- {{ total_items }} items</span>
+                {% endif %}
+            </p>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="flex items-center justify-center mb-8">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold">✓</div>
+                    <span class="ml-2 text-green-600">Bundle</span>
+                </div>
+                <div class="w-16 h-1 bg-green-500"></div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold">✓</div>
+                    <span class="ml-2 text-green-600">Items</span>
+                </div>
+                <div class="w-16 h-1 bg-orange-500"></div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold">3</div>
+                    <span class="ml-2 font-semibold text-orange-600">Details</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Order Summary -->
+            <div>
+                <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                        <span class="mr-2">📦</span> Your Bundle Summary
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Bundle Type:</span>
+                            <span class="font-semibold text-gray-900">{{ bundle_type_display }}</span>
+                        </div>
+                        {% if snack_total_units %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Snack Units:</span>
+                            <span class="font-semibold text-gray-900">{{ snack_total_units }}</span>
+                        </div>
+                        {% endif %}
+                        {% if juice_total_units %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Juice Units:</span>
+                            <span class="font-semibold text-gray-900">{{ juice_total_units }}</span>
+                        </div>
+                        {% endif %}
+                        {% if snack_total_units and juice_total_units %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Total Units:</span>
+                            <span class="font-semibold text-gray-900">{{ total_items }}</span>
+                        </div>
+                        {% endif %}
+
+                        {% if is_custom %}
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                            <p class="text-purple-800 text-sm">
+                                <strong>Custom Bundle:</strong> Your order includes items from our inventory. 
+                                The final price and item quantities will be confirmed by our team after review.
+                            </p>
+                        </div>
+                        {% else %}
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Total Items:</span>
+                            <span class="font-semibold text-gray-900">{{ total_items }} items</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Price Section -->
+                <div class="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl shadow-lg p-6 text-white">
+                    {% if is_custom %}
+                    <div class="text-center">
+                        <div class="text-lg mb-2">Custom Bundle Price</div>
+                        <div class="text-4xl font-black mb-2">Price TBD</div>
+                        <p class="text-orange-100 text-sm">
+                            Your custom bundle will be reviewed by our team. 
+                            Once approved, you'll receive the final price and payment instructions.
+                        </p>
+                    </div>
+                    {% else %}
+                    <div class="text-center">
+                        <div class="text-lg mb-2">Bundle Price</div>
+                        <div class="text-4xl font-black">${{ bundle_price|floatformat:0 }} JMD</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Customer Details Form -->
+            <div>
+                <form method="post" class="bg-white rounded-2xl shadow-lg p-6">
+                    {% csrf_token %}
+                    
+                    <h2 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                        <span class="mr-2">📝</span> Your Details
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label for="customer_name" class="block text-sm font-semibold text-gray-700 mb-2">
+                                Full Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="customer_name" name="customer_name" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
+                                   placeholder="Your full name">
+                        </div>
+                        
+                        <div>
+                            <label for="customer_phone" class="block text-sm font-semibold text-gray-700 mb-2">
+                                Phone Number <span class="text-red-500">*</span>
+                            </label>
+                            <input type="tel" id="customer_phone" name="customer_phone" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
+                                   placeholder="(876) 123-4567">
+                        </div>
+                        
+                        <div>
+                            <label for="customer_whatsapp" class="block text-sm font-semibold text-gray-700 mb-2">
+                                WhatsApp Number <span class="text-gray-400 text-xs">(if different)</span>
+                            </label>
+                            <input type="tel" id="customer_whatsapp" name="customer_whatsapp"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
+                                   placeholder="(876) 123-4567">
+                        </div>
+                        
+                        <div>
+                            <label for="pickup_spot" class="block text-sm font-semibold text-gray-700 mb-2">
+                                Pickup Location <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="pickup_spot" name="pickup_spot" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
+                                   placeholder="e.g., Spanish Town, School Name, etc.">
+                            <p class="text-xs text-gray-500 mt-1">Where would you like to pick up your order?</p>
+                        </div>
+                    </div>
+                    
+                    {% if is_custom %}
+                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mt-6">
+                        <p class="text-purple-800 text-sm">
+                            <strong>Custom Bundle Notice:</strong> After submitting, our team will review your order and calculate the best price. You'll be notified once it's approved!
+                        </p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="flex gap-4 mt-6">
+                        <a href="{% url 'core:bundle_builder_select' %}" class="flex-1 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-full text-center hover:bg-gray-50 transition">
+                            Back
+                        </a>
+                        <button type="submit" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                            {% if is_custom %}
+                            Submit for Review
+                            {% else %}
+                            Place Order
+                            {% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

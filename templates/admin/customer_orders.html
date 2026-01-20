@@ -1,0 +1,131 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Customer Orders - J.E.M Admin{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 mb-2">Customer Orders</h1>
+            <p class="text-gray-600">Manage orders from customers</p>
+        </div>
+        
+        <!-- Alert Badges -->
+        <div class="flex gap-4">
+            {% if pending_count > 0 %}
+            <a href="?status=pending_approval" class="px-4 py-2 bg-purple-100 text-purple-800 font-semibold rounded-lg hover:bg-purple-200 transition">
+                ⏳ {{ pending_count }} Pending Approval
+            </a>
+            {% endif %}
+            {% if payment_uploaded_count > 0 %}
+            <a href="?status=payment_uploaded" class="px-4 py-2 bg-yellow-100 text-yellow-800 font-semibold rounded-lg hover:bg-yellow-200 transition">
+                💳 {{ payment_uploaded_count }} Payment to Verify
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Filter Tabs -->
+<div class="mb-6">
+    <div class="flex flex-wrap gap-2">
+        <a href="{% url 'admin_customer_orders' %}" 
+           class="px-4 py-2 rounded-lg font-semibold {% if not status_filter %}bg-gray-900 text-white{% else %}bg-gray-200 text-gray-700 hover:bg-gray-300{% endif %} transition">
+            All
+        </a>
+        {% for value, label in status_choices %}
+        <a href="?status={{ value }}" 
+           class="px-4 py-2 rounded-lg font-semibold {% if status_filter == value %}bg-gray-900 text-white{% else %}bg-gray-200 text-gray-700 hover:bg-gray-300{% endif %} transition">
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Orders Table -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Reference</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Customer</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Bundle</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Revenue</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Profit</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for order in orders %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="font-mono font-bold text-orange-600">{{ order.order_reference }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div>
+                            <div class="font-semibold text-gray-900">{{ order.customer_name }}</div>
+                            <div class="text-xs text-gray-500">{{ order.customer_phone }}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full 
+                            {% if order.bundle_type == 'custom' %}bg-purple-100 text-purple-800
+                            {% elif order.bundle_type == 'mega_mix' %}bg-orange-100 text-orange-800
+                            {% else %}bg-blue-100 text-blue-800{% endif %}">
+                            {{ order.get_bundle_type_display }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full
+                            {% if order.status == 'pending_approval' %}bg-purple-100 text-purple-800
+                            {% elif order.status == 'approved' %}bg-blue-100 text-blue-800
+                            {% elif order.status == 'payment_uploaded' %}bg-yellow-100 text-yellow-800
+                            {% elif order.status == 'payment_verified' %}bg-teal-100 text-teal-800
+                            {% elif order.status == 'processing' %}bg-orange-100 text-orange-800
+                            {% elif order.status == 'completed' %}bg-green-100 text-green-800
+                            {% elif order.status == 'cancelled' %}bg-red-100 text-red-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ order.get_status_display }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap font-semibold text-gray-900">
+                        {% if order.total_revenue > 0 %}
+                        ${{ order.total_revenue|floatformat:0 }}
+                        {% else %}
+                        <span class="text-gray-400">TBD</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if order.net_profit > 0 %}
+                        <span class="text-green-600 font-semibold">${{ order.net_profit|floatformat:0 }}</span>
+                        <span class="text-xs text-gray-500">({{ order.profit_margin|floatformat:0 }}%)</span>
+                        {% else %}
+                        <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ order.created_at|date:"M d, Y" }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <a href="{% url 'admin_customer_order_detail' order.id %}" 
+                           class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                        <div class="text-6xl mb-4">📦</div>
+                        <p>No orders found</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

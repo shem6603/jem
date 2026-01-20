@@ -1,0 +1,325 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Select Your Items - J.E.M{% endblock %}
+
+{% block extra_css %}
+<style>
+    .item-card.excluded {
+        border-color: #ef4444 !important;
+        background-color: #fef2f2 !important;
+        opacity: 0.6;
+    }
+    .item-card.excluded .excluded-icon {
+        display: flex !important;
+    }
+    .star-btn.starred {
+        color: #eab308 !important;
+    }
+    .star-btn.starred svg {
+        fill: currentColor;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-b from-orange-50 via-white to-orange-50 py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-black text-gray-900 mb-2">
+                Select Your Items
+            </h1>
+            <p class="text-lg text-gray-600">
+                <span class="font-semibold text-orange-600">{{ bundle_type_display }}</span>
+                {% if bundle_price %} - ${{ bundle_price|floatformat:0 }} JMD{% endif %}
+            </p>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="flex items-center justify-center mb-8">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold">✓</div>
+                    <span class="ml-2 text-green-600">Bundle</span>
+                </div>
+                <div class="w-16 h-1 bg-orange-500"></div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
+                    <span class="ml-2 font-semibold text-orange-600">Select Items</span>
+                </div>
+                <div class="w-16 h-1 bg-gray-300"></div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">3</div>
+                    <span class="ml-2 text-gray-500">Details</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Instructions -->
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8">
+            <div class="flex items-start gap-3">
+                <span class="text-2xl">💡</span>
+                <div>
+                    <p class="text-blue-800 font-semibold mb-1">How it works:</p>
+                    <ul class="text-blue-700 text-sm space-y-1">
+                        <li>• <strong>All items are included by default</strong> - your bundle will contain all available items</li>
+                        <li>• <strong>Click</strong> on items you <strong>DON'T want</strong> to exclude them from your bundle</li>
+                        <li>• <strong>Star ⭐</strong> up to 2 items in each category to request more of those items</li>
+                        {% if is_custom %}
+                        <li>• <strong>Your custom bundle:</strong> 
+                            {% if custom_snack_qty > 0 %}{{ custom_snack_qty }} snacks{% endif %}
+                            {% if custom_snack_qty > 0 and custom_juice_qty > 0 %} and {% endif %}
+                            {% if custom_juice_qty > 0 %}{{ custom_juice_qty }} juices{% endif %}
+                        </li>
+                        <li>• The quantities will be distributed among included items (starred items get more)</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <form method="post" id="select-form">
+            {% csrf_token %}
+            
+            {% if show_snacks %}
+            <!-- Snacks Section -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                        <span class="mr-2">🍟</span> Snacks
+                        {% if is_custom and custom_snack_qty > 0 %}
+                        <span class="ml-3 px-3 py-1 bg-purple-100 text-purple-800 text-sm font-semibold rounded-full">{{ custom_snack_qty }} needed</span>
+                        {% endif %}
+                    </h2>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-gray-600">Excluded: <span id="snack-excluded-count" class="font-bold text-red-600">0</span></span>
+                        <span class="text-sm text-gray-600">Starred: <span id="snack-star-count" class="font-bold text-yellow-500">0</span>/2</span>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {% for snack in snacks %}
+                    <div class="item-card bg-white rounded-xl border-2 border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg cursor-pointer relative {% if snack.id in excluded_snacks %}excluded{% endif %}"
+                         data-item-id="{{ snack.id }}" data-category="snack">
+                        
+                        <!-- Excluded Icon -->
+                        <div class="excluded-icon absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full items-center justify-center text-white hidden">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </div>
+                        
+                        <!-- Image -->
+                        <div class="h-24 bg-gradient-to-br from-yellow-100 to-orange-100 flex items-center justify-center">
+                            {% if snack.image %}
+                            <img src="{{ snack.image.url }}" alt="{{ snack.name }}" class="h-20 w-20 object-cover rounded-lg">
+                            {% else %}
+                            <span class="text-4xl">🍟</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Info -->
+                        <div class="p-3">
+                            <h3 class="font-semibold text-gray-900 text-sm truncate">{{ snack.name }}</h3>
+                            {% if snack.is_spicy %}
+                            <span class="text-xs text-red-600">🌶️ Spicy</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Star Button -->
+                        <button type="button" class="star-btn absolute bottom-2 right-2 p-1 text-gray-400 hover:text-yellow-500 transition {% if snack.id in starred_snacks %}starred{% endif %}"
+                                onclick="event.stopPropagation(); toggleStar(this, {{ snack.id }}, 'snack')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Hidden Inputs -->
+                        <input type="checkbox" name="excluded_snacks" value="{{ snack.id }}" class="hidden exclude-checkbox" {% if snack.id in excluded_snacks %}checked{% endif %}>
+                        <input type="checkbox" name="starred_snacks" value="{{ snack.id }}" class="hidden star-checkbox" {% if snack.id in starred_snacks %}checked{% endif %}>
+                    </div>
+                    {% empty %}
+                    <p class="col-span-full text-center text-gray-500 py-8">No snacks available</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if show_juices %}
+            <!-- Juices Section -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                        <span class="mr-2">🧃</span> Juices
+                        {% if is_custom and custom_juice_qty > 0 %}
+                        <span class="ml-3 px-3 py-1 bg-purple-100 text-purple-800 text-sm font-semibold rounded-full">{{ custom_juice_qty }} needed</span>
+                        {% endif %}
+                    </h2>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-gray-600">Excluded: <span id="juice-excluded-count" class="font-bold text-red-600">0</span></span>
+                        <span class="text-sm text-gray-600">Starred: <span id="juice-star-count" class="font-bold text-yellow-500">0</span>/2</span>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {% for juice in juices %}
+                    <div class="item-card bg-white rounded-xl border-2 border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg cursor-pointer relative {% if juice.id in excluded_juices %}excluded{% endif %}"
+                         data-item-id="{{ juice.id }}" data-category="juice">
+                        
+                        <!-- Excluded Icon -->
+                        <div class="excluded-icon absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full items-center justify-center text-white hidden">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </div>
+                        
+                        <!-- Image -->
+                        <div class="h-24 bg-gradient-to-br from-green-100 to-teal-100 flex items-center justify-center">
+                            {% if juice.image %}
+                            <img src="{{ juice.image.url }}" alt="{{ juice.name }}" class="h-20 w-20 object-cover rounded-lg">
+                            {% else %}
+                            <span class="text-4xl">🧃</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Info -->
+                        <div class="p-3">
+                            <h3 class="font-semibold text-gray-900 text-sm truncate">{{ juice.name }}</h3>
+                        </div>
+                        
+                        <!-- Star Button -->
+                        <button type="button" class="star-btn absolute bottom-2 right-2 p-1 text-gray-400 hover:text-yellow-500 transition {% if juice.id in starred_juices %}starred{% endif %}"
+                                onclick="event.stopPropagation(); toggleStar(this, {{ juice.id }}, 'juice')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Hidden Inputs -->
+                        <input type="checkbox" name="excluded_juices" value="{{ juice.id }}" class="hidden exclude-checkbox" {% if juice.id in excluded_juices %}checked{% endif %}>
+                        <input type="checkbox" name="starred_juices" value="{{ juice.id }}" class="hidden star-checkbox" {% if juice.id in starred_juices %}checked{% endif %}>
+                    </div>
+                    {% empty %}
+                    <p class="col-span-full text-center text-gray-500 py-8">No juices available</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Summary & Submit -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 sticky bottom-4">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-6">
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-red-600" id="total-excluded">0</div>
+                            <div class="text-xs text-gray-500">Items Excluded</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-yellow-500" id="total-starred">0</div>
+                            <div class="text-xs text-gray-500">Starred</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-4">
+                        <a href="{% url 'core:bundle_builder' %}" class="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-full hover:bg-gray-50 transition">
+                            Back
+                        </a>
+                        <button type="submit" class="px-8 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                            Continue
+                            <svg class="inline-block ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle item card clicks (exclusion model)
+    document.querySelectorAll('.item-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const excludeCheckbox = this.querySelector('.exclude-checkbox');
+            excludeCheckbox.checked = !excludeCheckbox.checked;
+            this.classList.toggle('excluded', excludeCheckbox.checked);
+            
+            // Show/hide excluded icon
+            const excludedIcon = this.querySelector('.excluded-icon');
+            if (excludeCheckbox.checked) {
+                excludedIcon.style.display = 'flex';
+                // Also unstar if excluded
+                const starCheckbox = this.querySelector('.star-checkbox');
+                const starBtn = this.querySelector('.star-btn');
+                starCheckbox.checked = false;
+                starBtn.classList.remove('starred');
+            } else {
+                excludedIcon.style.display = 'none';
+            }
+            
+            updateCounts();
+        });
+    });
+    
+    // Initialize counts and visual state
+    document.querySelectorAll('.item-card').forEach(card => {
+        const excludeCheckbox = card.querySelector('.exclude-checkbox');
+        const excludedIcon = card.querySelector('.excluded-icon');
+        if (excludeCheckbox.checked) {
+            excludedIcon.style.display = 'flex';
+        }
+    });
+    
+    updateCounts();
+});
+
+function toggleStar(btn, itemId, category) {
+    const card = btn.closest('.item-card');
+    const excludeCheckbox = card.querySelector('.exclude-checkbox');
+    const starCheckbox = card.querySelector('.star-checkbox');
+    
+    // Cannot star excluded items
+    if (excludeCheckbox.checked) {
+        alert('You cannot star an item that is excluded. Please include it first.');
+        return;
+    }
+    
+    // Check star limit (max 2 per category)
+    const maxStars = 2;
+    const currentStarred = document.querySelectorAll(`[data-category="${category}"] .star-checkbox:checked`).length;
+    
+    if (!starCheckbox.checked && currentStarred >= maxStars) {
+        alert(`You can only star up to ${maxStars} ${category}s. Please unstar another item first.`);
+        return;
+    }
+    
+    starCheckbox.checked = !starCheckbox.checked;
+    btn.classList.toggle('starred', starCheckbox.checked);
+    
+    updateCounts();
+}
+
+function updateCounts() {
+    const snackExcludedCount = document.querySelectorAll('[data-category="snack"] .exclude-checkbox:checked').length;
+    const juiceExcludedCount = document.querySelectorAll('[data-category="juice"] .exclude-checkbox:checked').length;
+    const snackStarCount = document.querySelectorAll('[data-category="snack"] .star-checkbox:checked').length;
+    const juiceStarCount = document.querySelectorAll('[data-category="juice"] .star-checkbox:checked').length;
+    
+    const snackExcludedEl = document.getElementById('snack-excluded-count');
+    const juiceExcludedEl = document.getElementById('juice-excluded-count');
+    const snackStarCountEl = document.getElementById('snack-star-count');
+    const juiceStarCountEl = document.getElementById('juice-star-count');
+    
+    if (snackExcludedEl) snackExcludedEl.textContent = snackExcludedCount;
+    if (juiceExcludedEl) juiceExcludedEl.textContent = juiceExcludedCount;
+    if (snackStarCountEl) snackStarCountEl.textContent = snackStarCount;
+    if (juiceStarCountEl) juiceStarCountEl.textContent = juiceStarCount;
+    
+    document.getElementById('total-excluded').textContent = snackExcludedCount + juiceExcludedCount;
+    document.getElementById('total-starred').textContent = snackStarCount + juiceStarCount;
+}
+</script>
+{% endblock %}

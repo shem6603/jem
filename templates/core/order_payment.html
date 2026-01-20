@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Payment - Order {{ order.order_reference }} - J.E.M{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-b from-green-50 via-white to-green-50 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-4xl">💳</span>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-black text-gray-900 mb-2">
+                Complete Your Payment
+            </h1>
+            <p class="text-lg text-gray-600">
+                Order Reference: <span class="font-bold text-green-600">{{ order.order_reference }}</span>
+            </p>
+        </div>
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Order Summary -->
+            <div>
+                <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Order Summary</h2>
+                    
+                    <div class="space-y-3 mb-4">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Bundle:</span>
+                            <span class="font-semibold">{{ order.get_bundle_type_display }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Customer:</span>
+                            <span class="font-semibold">{{ order.customer_name }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Pickup:</span>
+                            <span class="font-semibold">{{ order.pickup_spot }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 pt-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-lg font-bold text-gray-900">Total Amount:</span>
+                            <span class="text-2xl font-black text-green-600">${{ order.total_revenue|floatformat:0 }} JMD</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Banking Info -->
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white">
+                    <h2 class="text-xl font-bold mb-4 flex items-center">
+                        <span class="mr-2">🏦</span> Banking Information
+                    </h2>
+                    
+                    {% for bank in banking_info %}
+                    <div class="bg-white/10 rounded-xl p-4 mb-4 last:mb-0">
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-blue-100">Bank:</span>
+                                <span class="font-bold">{{ bank.bank_name }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-blue-100">Account Name:</span>
+                                <span class="font-bold">{{ bank.account_name }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-blue-100">Account Number:</span>
+                                <span class="font-bold tracking-wider">{{ bank.account_number }}</span>
+                            </div>
+                            {% if bank.account_type %}
+                            <div class="flex justify-between">
+                                <span class="text-blue-100">Account Type:</span>
+                                <span class="font-bold">{{ bank.account_type }}</span>
+                            </div>
+                            {% endif %}
+                            {% if bank.branch %}
+                            <div class="flex justify-between">
+                                <span class="text-blue-100">Branch:</span>
+                                <span class="font-bold">{{ bank.branch }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% if bank.additional_info %}
+                        <p class="text-blue-100 text-sm mt-3 pt-3 border-t border-white/20">
+                            {{ bank.additional_info }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-blue-100">Please contact us on WhatsApp for payment details.</p>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Payment Upload -->
+            <div>
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                        <span class="mr-2">📤</span> Upload Payment Proof
+                    </h2>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                        <p class="text-yellow-800 text-sm">
+                            <strong>Important:</strong> After making your bank transfer, please upload a screenshot of the transfer confirmation here or send it via WhatsApp.
+                        </p>
+                    </div>
+                    
+                    <form method="post" enctype="multipart/form-data" class="space-y-4">
+                        {% csrf_token %}
+                        
+                        <div>
+                            <label for="payment_method" class="block text-sm font-semibold text-gray-700 mb-2">
+                                Payment Method
+                            </label>
+                            <select id="payment_method" name="payment_method" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition">
+                                <option value="">Select payment method...</option>
+                                <option value="NCB">NCB Bank Transfer</option>
+                                <option value="Scotiabank">Scotiabank Transfer</option>
+                                <option value="JMMB">JMMB Transfer</option>
+                                <option value="Sagicor">Sagicor Bank</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="payment_proof" class="block text-sm font-semibold text-gray-700 mb-2">
+                                Payment Screenshot <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input type="file" id="payment_proof" name="payment_proof" accept="image/*" required
+                                       class="hidden" onchange="previewImage(this)">
+                                <label for="payment_proof" class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer hover:border-green-500 hover:bg-green-50 transition">
+                                    <div id="upload-placeholder" class="text-center">
+                                        <svg class="w-12 h-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        <p class="text-gray-600 font-semibold">Click to upload screenshot</p>
+                                        <p class="text-sm text-gray-500">PNG, JPG up to 10MB</p>
+                                    </div>
+                                    <img id="preview-image" src="" alt="Preview" class="hidden max-h-44 rounded-lg">
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="w-full px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                            Upload Payment Proof
+                        </button>
+                    </form>
+                    
+                    <!-- WhatsApp Alternative -->
+                    <div class="mt-6 pt-6 border-t border-gray-200 text-center">
+                        <p class="text-gray-600 mb-3">Or send your payment proof via WhatsApp:</p>
+                        <a href="https://wa.me/18762030234?text=Hi!%20I%20just%20made%20a%20payment%20for%20order%20{{ order.order_reference }}%20and%20want%20to%20send%20my%20payment%20proof." 
+                           target="_blank"
+                           class="inline-flex items-center px-6 py-3 bg-green-500 text-white font-semibold rounded-full hover:bg-green-600 transition">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                            </svg>
+                            Send via WhatsApp
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('preview-image').src = e.target.result;
+            document.getElementById('preview-image').classList.remove('hidden');
+            document.getElementById('upload-placeholder').classList.add('hidden');
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+{% endblock %}

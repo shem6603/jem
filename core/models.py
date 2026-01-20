@@ -227,3 +227,165 @@ class Receipt(models.Model):
     
     def __str__(self):
         return f"{self.title} - ${self.amount} ({self.created_at.date()})"
+
+
+class CustomerOrder(models.Model):
+    """Customer-submitted orders that require approval for custom bundles"""
+    STATUS_CHOICES = [
+        ('pending_approval', 'Pending Approval'),  # For custom bundles
+        ('approved', 'Approved'),  # Admin approved, awaiting payment
+        ('payment_uploaded', 'Payment Uploaded'),  # Customer uploaded proof
+        ('payment_verified', 'Payment Verified'),  # Admin verified payment
+        ('processing', 'Processing'),  # Being prepared
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    BUNDLE_TYPE_CHOICES = [
+        ('10_snacks', '10 Snacks'),
+        ('25_snacks', '25 Snacks'),
+        ('25_juices', '25 Juices'),
+        ('mega_mix', 'Mega Mix'),
+        ('custom', 'Custom'),
+    ]
+    
+    # Customer info
+    customer_name = models.CharField(max_length=200)
+    customer_phone = models.CharField(max_length=20)
+    customer_whatsapp = models.CharField(max_length=20, blank=True, null=True)
+    pickup_spot = models.CharField(max_length=200, help_text="Pickup location")
+    
+    # Order details
+    bundle_type = models.CharField(max_length=20, choices=BUNDLE_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_approval')
+    
+    # For custom bundles - admin can modify
+    admin_notes = models.TextField(blank=True, help_text="Notes from admin about order modifications")
+    
+    # Financial (calculated by algorithm for custom, fixed for standard)
+    total_revenue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    net_profit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    profit_margin = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
+    # Payment proof
+    payment_proof = models.ImageField(upload_to='payment_proofs/%Y/%m/%d/', blank=True, null=True)
+    payment_method = models.CharField(max_length=50, blank=True, null=True, help_text="e.g., Bank Transfer, NCB, etc.")
+    
+    # Tracking
+    order_reference = models.CharField(max_length=20, unique=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
+    approved_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_orders')
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['bundle_type']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Order {self.order_reference} - {self.customer_name} - {self.get_bundle_type_display()}"
+    
+    def save(self, *args, **kwargs):
+        if not self.order_reference:
+            # Generate unique order reference
+            import random
+            import string
+            while True:
+                ref = 'JEM-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                if not CustomerOrder.objects.filter(order_reference=ref).exists():
+                    self.order_reference = ref
+                    break
+        super().save(*args, **kwargs)
+    
+    def calculate_totals(self):
+        """Calculate totals based on order items"""
+        items = self.customer_order_items.select_related('item')
+        
+        # Fixed prices for standard bundles
+        fixed_prices = {
+            '10_snacks': Decimal('1000.00'),
+            '25_snacks': Decimal('3000.00'),
+            '25_juices': Decimal('2700.00'),
+            'mega_mix': Decimal('5500.00'),
+        }
+        
+        if self.bundle_type in fixed_prices:
+            self.total_revenue = fixed_prices[self.bundle_type]
+        else:
+            # For custom, revenue is calculated to maintain profit margin
+            pass  # Will be set by algorithm
+        
+        # Calculate total cost
+        self.total_cost = sum(
+            item.item.cost_price * Decimal(str(item.quantity))
+            for item in items
+        )
+        
+        self.net_profit = self.total_revenue - self.total_cost
+        if self.total_revenue > 0:
+            self.profit_margin = (self.net_profit / self.total_revenue) * 100
+        
+        CustomerOrder.objects.filter(id=self.id).update(
+            total_revenue=self.total_revenue,
+            total_cost=self.total_cost,
+            net_profit=self.net_profit,
+            profit_margin=self.profit_margin
+        )
+    
+    @property
+    def is_custom(self):
+        return self.bundle_type == 'custom'
+    
+    @property
+    def needs_approval(self):
+        return self.is_custom and self.status == 'pending_approval'
+    
+    @property
+    def can_show_price(self):
+        """Price is visible for standard bundles, or approved custom bundles"""
+        if not self.is_custom:
+            return True
+        return self.status not in ['pending_approval']
+
+
+class CustomerOrderItem(models.Model):
+    """Items selected by customer for their order"""
+    order = models.ForeignKey(CustomerOrder, on_delete=models.CASCADE, related_name='customer_order_items')
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name='customer_order_items')
+    quantity = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    is_starred = models.BooleanField(default=False, help_text="Customer wants more of this item")
+    
+    class Meta:
+        unique_together = ['order', 'item']
+    
+    def __str__(self):
+        star = " ⭐" if self.is_starred else ""
+        return f"{self.quantity}x {self.item.name}{star} in {self.order.order_reference}"
+    
+    @property
+    def subtotal_cost(self):
+        return self.item.cost_price * self.quantity
+
+
+class BankingInfo(models.Model):
+    """Company banking information for customers to make payments"""
+    bank_name = models.CharField(max_length=100)
+    account_name = models.CharField(max_length=200)
+    account_number = models.CharField(max_length=50)
+    account_type = models.CharField(max_length=50, blank=True, help_text="e.g., Savings, Chequing")
+    branch = models.CharField(max_length=100, blank=True)
+    additional_info = models.TextField(blank=True, help_text="Additional payment instructions")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name_plural = "Banking Info"
+        ordering = ['bank_name']
+    
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_number}"
