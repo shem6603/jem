@@ -13,7 +13,7 @@ from django.core.validators import validate_email
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import time
 from collections import defaultdict
 
@@ -186,6 +186,750 @@ def admin_order_records(request):
     }
     
     return render(request, 'admin/order_records.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
+@csrf_protect
+@require_http_methods(["GET", "POST"])
+def admin_add_order(request):
+    """Simple admin order creation - select order type and items"""
+    from .models import Item, Customer, Order, OrderItem, BundleType
+    
+    # Get or create predefined bundle types
+    bundle_10_snacks, _ = BundleType.objects.get_or_create(
+        name='10 Snacks',
+        defaults={'required_snacks': 10, 'required_juices': 0, 'is_active': True}
+    )
+    bundle_25_snacks, _ = BundleType.objects.get_or_create(
+        name='25 Snacks',
+        defaults={'required_snacks': 25, 'required_juices': 0, 'is_active': True}
+    )
+    bundle_25_juices, _ = BundleType.objects.get_or_create(
+        name='25 Juices',
+        defaults={'required_snacks': 0, 'required_juices': 25, 'is_active': True}
+    )
+    bundle_mega_mix, _ = BundleType.objects.get_or_create(
+        name='Mega Mix',
+        defaults={'required_snacks': 30, 'required_juices': 24, 'is_active': True}
+    )
+    
+    # Get all available items
+    items = Item.objects.filter(current_stock__gt=0).order_by('category', 'name')
+    snacks = items.filter(category='snack')
+    juices = items.filter(category='juice')
+    
+    if request.method == 'POST':
+        customer_name = request.POST.get('customer_name', '').strip()
+        customer_phone = request.POST.get('customer_phone', '').strip()
+        pickup_spot = request.POST.get('pickup_spot', '').strip()
+        order_date = request.POST.get('order_date', '').strip()
+        order_type = request.POST.get('order_type', '').strip()
+        custom_order_name = request.POST.get('custom_order_name', '').strip()
+        use_inventory = request.POST.get('use_inventory') == 'on'
+        total_revenue = request.POST.get('total_revenue', '').strip()
+        total_cost = request.POST.get('total_cost', '').strip()
+        net_profit = request.POST.get('net_profit', '').strip()
+        
+        if not customer_name:
+            messages.error(request, 'Customer name is required.')
+        elif not pickup_spot:
+            messages.error(request, 'Pickup spot is required.')
+        elif not order_date:
+            messages.error(request, 'Order date is required.')
+        elif not order_type:
+            messages.error(request, 'Order type is required.')
+        else:
+            # Validate manual financial inputs when not using inventory
+            if not use_inventory:
+                if not total_revenue:
+                    messages.error(request, 'Revenue is required when not using inventory.')
+                    return render(request, 'admin/add_order.html', {
+                        'snacks': snacks,
+                        'juices': juices,
+                        'customer_name': customer_name,
+                        'customer_phone': customer_phone,
+                        'pickup_spot': pickup_spot,
+                        'order_date': order_date,
+                        'order_type': order_type,
+                        'custom_order_name': custom_order_name,
+                        'total_revenue': total_revenue,
+                        'total_cost': total_cost,
+                        'net_profit': net_profit,
+                        'use_inventory': use_inventory,
+                    })
+                elif not total_cost:
+                    messages.error(request, 'Total cost is required when not using inventory.')
+                    return render(request, 'admin/add_order.html', {
+                        'snacks': snacks,
+                        'juices': juices,
+                        'customer_name': customer_name,
+                        'customer_phone': customer_phone,
+                        'pickup_spot': pickup_spot,
+                        'order_date': order_date,
+                        'order_type': order_type,
+                        'custom_order_name': custom_order_name,
+                        'total_revenue': total_revenue,
+                        'total_cost': total_cost,
+                        'net_profit': net_profit,
+                        'use_inventory': use_inventory,
+                    })
+                else:
+                    try:
+                        total_revenue_decimal = Decimal(total_revenue)
+                        total_cost_decimal = Decimal(total_cost)
+                        if total_revenue_decimal < 0 or total_cost_decimal < 0:
+                            messages.error(request, 'Revenue and cost must be positive numbers.')
+                            return render(request, 'admin/add_order.html', {
+                                'snacks': snacks,
+                                'juices': juices,
+                                'customer_name': customer_name,
+                                'customer_phone': customer_phone,
+                                'pickup_spot': pickup_spot,
+                                'order_date': order_date,
+                                'order_type': order_type,
+                                'custom_order_name': custom_order_name,
+                                'total_revenue': total_revenue,
+                                'total_cost': total_cost,
+                                'net_profit': net_profit,
+                                'use_inventory': use_inventory,
+                            })
+                    except (ValueError, InvalidOperation):
+                        messages.error(request, 'Please enter valid numbers for revenue and cost.')
+                        return render(request, 'admin/add_order.html', {
+                            'snacks': snacks,
+                            'juices': juices,
+                            'customer_name': customer_name,
+                            'customer_phone': customer_phone,
+                            'pickup_spot': pickup_spot,
+                            'order_date': order_date,
+                            'order_type': order_type,
+                            'custom_order_name': custom_order_name,
+                            'total_revenue': total_revenue,
+                            'total_cost': total_cost,
+                            'net_profit': net_profit,
+                            'use_inventory': use_inventory,
+                        })
+            
+            # Determine bundle type and requirements
+            bundle_type = None
+            required_snacks = 0
+            required_juices = 0
+            
+            if use_inventory:
+                if order_type == 'custom':
+                    if not custom_order_name:
+                        messages.error(request, 'Please enter a custom order name.')
+                        return render(request, 'admin/add_order.html', {
+                            'snacks': snacks,
+                            'juices': juices,
+                            'customer_name': customer_name,
+                            'customer_phone': customer_phone,
+                            'pickup_spot': pickup_spot,
+                            'order_type': order_type,
+                            'custom_order_name': custom_order_name,
+                            'use_inventory': use_inventory,
+                        })
+                    # Create custom bundle type
+                    bundle_type, _ = BundleType.objects.get_or_create(
+                        name=custom_order_name,
+                        defaults={'required_snacks': 0, 'required_juices': 0, 'is_active': True}
+                    )
+                    required_snacks = 0
+                    required_juices = 0
+                elif order_type == '10_snacks':
+                    bundle_type = bundle_10_snacks
+                    required_snacks = 10
+                    required_juices = 0
+                elif order_type == '25_snacks':
+                    bundle_type = bundle_25_snacks
+                    required_snacks = 25
+                    required_juices = 0
+                elif order_type == '25_juices':
+                    bundle_type = bundle_25_juices
+                    required_snacks = 0
+                    required_juices = 25
+                elif order_type == 'mega_mix':
+                    bundle_type = bundle_mega_mix
+                    required_snacks = 30
+                    required_juices = 24
+                else:
+                    messages.error(request, 'Invalid order type selected.')
+                    return render(request, 'admin/add_order.html', {
+                        'snacks': snacks,
+                        'juices': juices,
+                        'customer_name': customer_name,
+                        'customer_phone': customer_phone,
+                        'pickup_spot': pickup_spot,
+                        'use_inventory': use_inventory,
+                    })
+            else:
+                # For back-dated orders (not using inventory), create bundle from order type
+                if order_type == 'custom':
+                    if not custom_order_name:
+                        messages.error(request, 'Please enter a custom order name.')
+                        return render(request, 'admin/add_order.html', {
+                            'snacks': snacks,
+                            'juices': juices,
+                            'customer_name': customer_name,
+                            'customer_phone': customer_phone,
+                            'pickup_spot': pickup_spot,
+                            'order_date': order_date,
+                            'order_type': order_type,
+                            'custom_order_name': custom_order_name,
+                            'total_revenue': total_revenue,
+                            'total_cost': total_cost,
+                            'net_profit': net_profit,
+                            'use_inventory': use_inventory,
+                        })
+                    bundle_type, _ = BundleType.objects.get_or_create(
+                        name=custom_order_name,
+                        defaults={'required_snacks': 0, 'required_juices': 0, 'is_active': True}
+                    )
+                elif order_type == '10_snacks':
+                    bundle_type = bundle_10_snacks
+                elif order_type == '25_snacks':
+                    bundle_type = bundle_25_snacks
+                elif order_type == '25_juices':
+                    bundle_type = bundle_25_juices
+                elif order_type == 'mega_mix':
+                    bundle_type = bundle_mega_mix
+                else:
+                    messages.error(request, 'Invalid order type selected.')
+                    return render(request, 'admin/add_order.html', {
+                        'snacks': snacks,
+                        'juices': juices,
+                        'customer_name': customer_name,
+                        'customer_phone': customer_phone,
+                        'pickup_spot': pickup_spot,
+                        'order_date': order_date,
+                        'order_type': order_type,
+                        'custom_order_name': custom_order_name,
+                        'total_revenue': total_revenue,
+                        'total_cost': total_cost,
+                        'net_profit': net_profit,
+                        'use_inventory': use_inventory,
+                    })
+            
+            # Only get items if use_inventory is checked
+            selected_snacks = []
+            selected_juices = []
+            total_snacks = 0
+            total_juices = 0
+            
+            if use_inventory:
+                for snack in snacks:
+                    quantity_str = request.POST.get(f'snack_{snack.id}', '').strip()
+                    if quantity_str:
+                        try:
+                            quantity = int(quantity_str)
+                            if quantity > 0:
+                                if quantity > snack.current_stock:
+                                    messages.error(request, f'Cannot order {quantity} units of {snack.name}. Only {snack.current_stock} units available.')
+                                    return render(request, 'admin/add_order.html', {
+                                        'snacks': snacks,
+                                        'juices': juices,
+                                        'customer_name': customer_name,
+                                        'customer_phone': customer_phone,
+                                        'pickup_spot': pickup_spot,
+                                        'order_type': order_type,
+                                        'custom_order_name': custom_order_name,
+                                        'use_inventory': use_inventory,
+                                    })
+                                selected_snacks.append((snack, quantity))
+                                total_snacks += quantity
+                        except ValueError:
+                            pass
+                
+                for juice in juices:
+                    quantity_str = request.POST.get(f'juice_{juice.id}', '').strip()
+                    if quantity_str:
+                        try:
+                            quantity = int(quantity_str)
+                            if quantity > 0:
+                                if quantity > juice.current_stock:
+                                    messages.error(request, f'Cannot order {quantity} units of {juice.name}. Only {juice.current_stock} units available.')
+                                    return render(request, 'admin/add_order.html', {
+                                        'snacks': snacks,
+                                        'juices': juices,
+                                        'customer_name': customer_name,
+                                        'customer_phone': customer_phone,
+                                        'pickup_spot': pickup_spot,
+                                        'order_type': order_type,
+                                        'custom_order_name': custom_order_name,
+                                        'use_inventory': use_inventory,
+                                    })
+                                selected_juices.append((juice, quantity))
+                                total_juices += quantity
+                        except ValueError:
+                            pass
+                
+                # Validate quantities for predefined types
+                if order_type != 'custom':
+                    if required_snacks > 0 and total_snacks != required_snacks:
+                        messages.error(request, f'Please select exactly {required_snacks} snacks. You selected {total_snacks}.')
+                        return render(request, 'admin/add_order.html', {
+                            'snacks': snacks,
+                            'juices': juices,
+                            'customer_name': customer_name,
+                            'customer_phone': customer_phone,
+                            'pickup_spot': pickup_spot,
+                            'order_type': order_type,
+                            'custom_order_name': custom_order_name,
+                            'use_inventory': use_inventory,
+                        })
+                    if required_juices > 0 and total_juices != required_juices:
+                        messages.error(request, f'Please select exactly {required_juices} juices. You selected {total_juices}.')
+                        return render(request, 'admin/add_order.html', {
+                            'snacks': snacks,
+                            'juices': juices,
+                            'customer_name': customer_name,
+                            'customer_phone': customer_phone,
+                            'pickup_spot': pickup_spot,
+                            'order_type': order_type,
+                            'custom_order_name': custom_order_name,
+                            'use_inventory': use_inventory,
+                        })
+                
+                if not selected_snacks and not selected_juices:
+                    messages.error(request, 'Please select at least one item when using inventory.')
+                    return render(request, 'admin/add_order.html', {
+                        'snacks': snacks,
+                        'juices': juices,
+                        'customer_name': customer_name,
+                        'customer_phone': customer_phone,
+                        'pickup_spot': pickup_spot,
+                        'order_type': order_type,
+                        'custom_order_name': custom_order_name,
+                        'use_inventory': use_inventory,
+                    })
+            
+            # Create order (works with or without inventory)
+            try:
+                # Create or get customer
+                customer, created = Customer.objects.get_or_create(
+                    name=customer_name,
+                    defaults={'phone': customer_phone, 'pickup_spot': pickup_spot}
+                )
+                # Update pickup spot if customer exists
+                if not created and pickup_spot:
+                    customer.pickup_spot = pickup_spot
+                    customer.save()
+                
+                # Parse order date if provided
+                from django.utils import timezone
+                from datetime import datetime
+                order_created_at = timezone.now()
+                if order_date:
+                    try:
+                        order_created_at = timezone.make_aware(datetime.strptime(order_date, '%Y-%m-%d'))
+                    except ValueError:
+                        pass  # Use current time if date parsing fails
+                
+                # Create order
+                order = Order.objects.create(
+                    customer=customer,
+                    bundle_type=bundle_type,
+                    status='completed',
+                )
+                # Override created_at if custom date was provided
+                if order_date:
+                    Order.objects.filter(id=order.id).update(created_at=order_created_at)
+                    order.refresh_from_db()
+                
+                # Handle order items and financials based on use_inventory flag
+                if use_inventory:
+                    # Create order items and update stock
+                    for item, quantity in selected_snacks + selected_juices:
+                        OrderItem.objects.create(order=order, item=item, quantity=quantity)
+                        item.current_stock -= quantity
+                        item.save()
+                    
+                    # Refresh order to ensure order_items relationship is loaded
+                    order.refresh_from_db()
+                    
+                    # Recalculate totals (Revenue, Total Cost, Profit)
+                    # Currently uses: Revenue = sum(item.sell_price * quantity), Cost = sum(item.cost_price * quantity), Profit = Revenue - Cost
+                    # TODO: User will provide custom calculation logic for Revenue and Profit
+                    order.calculate_totals()
+                else:
+                    # For back-dated orders, use manual financial inputs with direct update
+                    # to avoid calculate_totals() being called in save()
+                    try:
+                        revenue_decimal = Decimal(total_revenue)
+                        cost_decimal = Decimal(total_cost)
+                        profit_decimal = Decimal(net_profit) if net_profit else (revenue_decimal - cost_decimal)
+                        margin = (profit_decimal / revenue_decimal * 100) if revenue_decimal > 0 else Decimal('0')
+                        
+                        # Use direct update to avoid triggering calculate_totals() in save()
+                        Order.objects.filter(id=order.id).update(
+                            total_revenue=revenue_decimal,
+                            total_cost=cost_decimal,
+                            net_profit=profit_decimal,
+                            profit_margin=margin
+                        )
+                    except (ValueError, InvalidOperation):
+                        messages.error(request, 'Invalid financial values provided.')
+                        return render(request, 'admin/add_order.html', {
+                            'snacks': snacks,
+                            'juices': juices,
+                            'customer_name': customer_name,
+                            'customer_phone': customer_phone,
+                            'pickup_spot': pickup_spot,
+                            'order_date': order_date,
+                            'order_type': order_type,
+                            'custom_order_name': custom_order_name,
+                            'total_revenue': total_revenue,
+                            'total_cost': total_cost,
+                            'net_profit': net_profit,
+                            'use_inventory': use_inventory,
+                        })
+                
+                if use_inventory:
+                    messages.success(request, f'Order #{order.id} created successfully! Stock has been deducted.')
+                else:
+                    messages.success(request, f'Order #{order.id} created successfully! (Back-dated order - inventory not affected)')
+                return redirect('admin_order_records')
+            except Exception as e:
+                messages.error(request, f'An error occurred: {str(e)}')
+    
+    # Set default date to today
+    from django.utils import timezone
+    default_date = timezone.now().strftime('%Y-%m-%d')
+    
+    context = {
+        'snacks': snacks,
+        'juices': juices,
+        'order_date': default_date,
+        'total_revenue': '',
+        'total_cost': '',
+        'net_profit': '',
+    }
+    return render(request, 'admin/add_order.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
+@csrf_protect
+@require_http_methods(["GET", "POST"])
+def admin_edit_order(request, order_id):
+    """Edit existing order"""
+    from .models import Item, Customer, Order, OrderItem, BundleType
+    
+    order = get_object_or_404(Order, id=order_id)
+    
+    # Get or create predefined bundle types
+    bundle_10_snacks, _ = BundleType.objects.get_or_create(
+        name='10 Snacks',
+        defaults={'required_snacks': 10, 'required_juices': 0, 'is_active': True}
+    )
+    bundle_25_snacks, _ = BundleType.objects.get_or_create(
+        name='25 Snacks',
+        defaults={'required_snacks': 25, 'required_juices': 0, 'is_active': True}
+    )
+    bundle_25_juices, _ = BundleType.objects.get_or_create(
+        name='25 Juices',
+        defaults={'required_snacks': 0, 'required_juices': 25, 'is_active': True}
+    )
+    bundle_mega_mix, _ = BundleType.objects.get_or_create(
+        name='Mega Mix',
+        defaults={'required_snacks': 30, 'required_juices': 24, 'is_active': True}
+    )
+    
+    # Get all items (including those with 0 stock for editing)
+    items = Item.objects.all().order_by('category', 'name')
+    snacks = items.filter(category='snack')
+    juices = items.filter(category='juice')
+    
+    # Get existing order items
+    existing_order_items = {item.item.id: item.quantity for item in order.order_items.all()}
+    
+    # Prepare snacks and juices with existing quantities and available stock
+    snacks_with_data = []
+    for snack in snacks:
+        existing_qty = existing_order_items.get(snack.id, 0)
+        available_stock = snack.current_stock + existing_qty
+        snacks_with_data.append({
+            'item': snack,
+            'existing_qty': existing_qty,
+            'available_stock': available_stock,
+        })
+    
+    juices_with_data = []
+    for juice in juices:
+        existing_qty = existing_order_items.get(juice.id, 0)
+        available_stock = juice.current_stock + existing_qty
+        juices_with_data.append({
+            'item': juice,
+            'existing_qty': existing_qty,
+            'available_stock': available_stock,
+        })
+    
+    if request.method == 'POST':
+        customer_name = request.POST.get('customer_name', '').strip()
+        customer_phone = request.POST.get('customer_phone', '').strip()
+        pickup_spot = request.POST.get('pickup_spot', '').strip()
+        order_date = request.POST.get('order_date', '').strip()
+        order_type = request.POST.get('order_type', '').strip()
+        custom_order_name = request.POST.get('custom_order_name', '').strip()
+        use_inventory = request.POST.get('use_inventory') == 'on'
+        total_revenue = request.POST.get('total_revenue', '').strip()
+        total_cost = request.POST.get('total_cost', '').strip()
+        net_profit = request.POST.get('net_profit', '').strip()
+        
+        # Track if there are validation errors
+        has_errors = False
+        
+        if not customer_name:
+            messages.error(request, 'Customer name is required.')
+            has_errors = True
+        elif not pickup_spot:
+            messages.error(request, 'Pickup spot is required.')
+            has_errors = True
+        elif not order_date:
+            messages.error(request, 'Order date is required.')
+            has_errors = True
+        elif not order_type:
+            messages.error(request, 'Order type is required.')
+            has_errors = True
+        else:
+            # Validate manual financial inputs when not using inventory
+            if not use_inventory:
+                if not total_revenue:
+                    messages.error(request, 'Revenue is required when not using inventory.')
+                    has_errors = True
+                elif not total_cost:
+                    messages.error(request, 'Total cost is required when not using inventory.')
+                    has_errors = True
+                else:
+                    try:
+                        total_revenue_decimal = Decimal(total_revenue)
+                        total_cost_decimal = Decimal(total_cost)
+                        if total_revenue_decimal < 0 or total_cost_decimal < 0:
+                            messages.error(request, 'Revenue and cost must be positive numbers.')
+                            has_errors = True
+                    except (ValueError, InvalidOperation):
+                        messages.error(request, 'Please enter valid numbers for revenue and cost.')
+                        has_errors = True
+            
+            if not has_errors:
+                # Determine bundle type
+                bundle_type = None
+                required_snacks = 0
+                required_juices = 0
+                
+                if use_inventory:
+                    if order_type == 'custom':
+                        if not custom_order_name:
+                            messages.error(request, 'Please enter a custom order name.')
+                            has_errors = True
+                        else:
+                            bundle_type, _ = BundleType.objects.get_or_create(
+                                name=custom_order_name,
+                                defaults={'required_snacks': 0, 'required_juices': 0, 'is_active': True}
+                            )
+                            required_snacks = 0
+                            required_juices = 0
+                    elif order_type == '10_snacks':
+                        bundle_type = bundle_10_snacks
+                        required_snacks = 10
+                        required_juices = 0
+                    elif order_type == '25_snacks':
+                        bundle_type = bundle_25_snacks
+                        required_snacks = 25
+                        required_juices = 0
+                    elif order_type == '25_juices':
+                        bundle_type = bundle_25_juices
+                        required_snacks = 0
+                        required_juices = 25
+                    elif order_type == 'mega_mix':
+                        bundle_type = bundle_mega_mix
+                        required_snacks = 30
+                        required_juices = 24
+                else:
+                    # For back-dated orders
+                    if order_type == 'custom':
+                        if not custom_order_name:
+                            messages.error(request, 'Please enter a custom order name.')
+                            has_errors = True
+                        else:
+                            bundle_type, _ = BundleType.objects.get_or_create(
+                                name=custom_order_name,
+                                defaults={'required_snacks': 0, 'required_juices': 0, 'is_active': True}
+                            )
+                    elif order_type == '10_snacks':
+                        bundle_type = bundle_10_snacks
+                    elif order_type == '25_snacks':
+                        bundle_type = bundle_25_snacks
+                    elif order_type == '25_juices':
+                        bundle_type = bundle_25_juices
+                    elif order_type == 'mega_mix':
+                        bundle_type = bundle_mega_mix
+                
+                if bundle_type and not has_errors:
+                    try:
+                        # Update customer
+                        order.customer.name = customer_name
+                        order.customer.phone = customer_phone
+                        order.customer.pickup_spot = pickup_spot
+                        order.customer.save()
+                        
+                        # Update bundle type
+                        order.bundle_type = bundle_type
+                        
+                        # Update order date
+                        from django.utils import timezone
+                        from datetime import datetime
+                        if order_date:
+                            try:
+                                order_created_at = timezone.make_aware(datetime.strptime(order_date, '%Y-%m-%d'))
+                                Order.objects.filter(id=order.id).update(created_at=order_created_at)
+                            except ValueError:
+                                pass
+                        
+                        # Handle order items and financials
+                        if use_inventory:
+                            # Get selected items
+                            selected_snacks = []
+                            selected_juices = []
+                            total_snacks = 0
+                            total_juices = 0
+                            
+                            for snack in snacks:
+                                quantity_str = request.POST.get(f'snack_{snack.id}', '').strip()
+                                if quantity_str:
+                                    try:
+                                        quantity = int(quantity_str)
+                                        if quantity > 0:
+                                            # Check stock availability (add back old quantity first)
+                                            old_quantity = existing_order_items.get(snack.id, 0)
+                                            available_stock = snack.current_stock + old_quantity
+                                            if quantity > available_stock:
+                                                messages.error(request, f'Cannot order {quantity} units of {snack.name}. Only {available_stock} units available.')
+                                                has_errors = True
+                                                break
+                                            selected_snacks.append((snack, quantity))
+                                            total_snacks += quantity
+                                    except ValueError:
+                                        pass
+                            
+                            for juice in juices:
+                                if has_errors:
+                                    break
+                                quantity_str = request.POST.get(f'juice_{juice.id}', '').strip()
+                                if quantity_str:
+                                    try:
+                                        quantity = int(quantity_str)
+                                        if quantity > 0:
+                                            old_quantity = existing_order_items.get(juice.id, 0)
+                                            available_stock = juice.current_stock + old_quantity
+                                            if quantity > available_stock:
+                                                messages.error(request, f'Cannot order {quantity} units of {juice.name}. Only {available_stock} units available.')
+                                                has_errors = True
+                                                break
+                                            selected_juices.append((juice, quantity))
+                                            total_juices += quantity
+                                    except ValueError:
+                                        pass
+                            
+                            # Validate quantities for predefined types
+                            if not has_errors:
+                                if order_type != 'custom':
+                                    if required_snacks > 0 and total_snacks != required_snacks:
+                                        messages.error(request, f'Please select exactly {required_snacks} snacks. You selected {total_snacks}.')
+                                        has_errors = True
+                                    if required_juices > 0 and total_juices != required_juices:
+                                        messages.error(request, f'Please select exactly {required_juices} juices. You selected {total_juices}.')
+                                        has_errors = True
+                                
+                                if not has_errors:
+                                    # Restore old stock quantities
+                                    for item_id, old_quantity in existing_order_items.items():
+                                        try:
+                                            item = Item.objects.get(id=item_id)
+                                            item.current_stock += old_quantity
+                                            item.save()
+                                        except Item.DoesNotExist:
+                                            pass
+                                    
+                                    # Delete old order items
+                                    order.order_items.all().delete()
+                                    
+                                    # Create new order items and update stock
+                                    for item, quantity in selected_snacks + selected_juices:
+                                        OrderItem.objects.create(order=order, item=item, quantity=quantity)
+                                        item.current_stock -= quantity
+                                        item.save()
+                                    
+                                    # Refresh order to ensure order_items relationship is loaded
+                                    order.refresh_from_db()
+                                    order.save()
+                                    order.calculate_totals()
+                                    messages.success(request, f'Order #{order.id} updated successfully!')
+                                    return redirect('admin_order_records')
+                        else:
+                            # Update financials for back-dated orders using direct update to avoid calculate_totals()
+                            revenue_decimal = Decimal(total_revenue)
+                            cost_decimal = Decimal(total_cost)
+                            profit_decimal = Decimal(net_profit) if net_profit else (revenue_decimal - cost_decimal)
+                            margin = (profit_decimal / revenue_decimal * 100) if revenue_decimal > 0 else Decimal('0')
+                            
+                            # Use direct update to avoid triggering calculate_totals() in save()
+                            Order.objects.filter(id=order.id).update(
+                                bundle_type=bundle_type,
+                                total_revenue=revenue_decimal,
+                                total_cost=cost_decimal,
+                                net_profit=profit_decimal,
+                                profit_margin=margin
+                            )
+                            messages.success(request, f'Order #{order.id} updated successfully!')
+                            return redirect('admin_order_records')
+                    except Exception as e:
+                        messages.error(request, f'An error occurred: {str(e)}')
+    
+    # Determine current order type from bundle
+    current_order_type = ''
+    current_custom_name = ''
+    if order.bundle_type:
+        bundle_name = order.bundle_type.name
+        if bundle_name == '10 Snacks':
+            current_order_type = '10_snacks'
+        elif bundle_name == '25 Snacks':
+            current_order_type = '25_snacks'
+        elif bundle_name == '25 Juices':
+            current_order_type = '25_juices'
+        elif bundle_name == 'Mega Mix':
+            current_order_type = 'mega_mix'
+        else:
+            current_order_type = 'custom'
+            current_custom_name = bundle_name
+    
+    # Determine if order uses inventory (has order items)
+    has_order_items = order.order_items.exists()
+    
+    # Set default date
+    from django.utils import timezone
+    order_date = order.created_at.strftime('%Y-%m-%d') if order.created_at else timezone.now().strftime('%Y-%m-%d')
+    
+    context = {
+        'order': order,
+        'snacks': snacks,
+        'juices': juices,
+        'snacks_with_data': snacks_with_data,
+        'juices_with_data': juices_with_data,
+        'existing_order_items': existing_order_items,
+        'customer_name': order.customer.name,
+        'customer_phone': order.customer.phone or '',
+        'pickup_spot': order.customer.pickup_spot or '',
+        'order_date': order_date,
+        'order_type': current_order_type,
+        'custom_order_name': current_custom_name,
+        'total_revenue': str(order.total_revenue),
+        'total_cost': str(order.total_cost),
+        'net_profit': str(order.net_profit),
+        'use_inventory': has_order_items,
+    }
+    return render(request, 'admin/edit_order.html', context)
 
 
 @login_required

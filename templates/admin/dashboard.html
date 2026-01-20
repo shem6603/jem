@@ -67,7 +67,6 @@
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Category</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Stock Remaining</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cost per Unit</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sell Price</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
@@ -97,7 +96,6 @@
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${{ item.cost_price|floatformat:2 }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${{ item.sell_price|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

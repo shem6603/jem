@@ -82,8 +82,8 @@ class BundleType(models.Model):
 class Customer(models.Model):
     """Customer information"""
     name = models.CharField(max_length=200)
-    email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
+    pickup_spot = models.CharField(max_length=200, blank=True, null=True, help_text="Pickup location/spot")
     address = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -127,14 +127,35 @@ class Order(models.Model):
     
     def calculate_totals(self):
         """Calculate total revenue, cost, profit, and margin"""
-        order_items = self.order_items.all()
+        # Force a fresh query to ensure we get all order items
+        order_items = list(OrderItem.objects.filter(order_id=self.id).select_related('item'))
         
-        # Only calculate revenue if sell_price is set for all items
-        self.total_revenue = sum(
-            (item.item.sell_price * item.quantity) if item.item.sell_price else Decimal('0.00')
-            for item in order_items
-        )
-        self.total_cost = sum(item.item.cost_price * item.quantity for item in order_items)
+        # Fixed revenue prices based on bundle type
+        bundle_revenue_prices = {
+            '10 Snacks': Decimal('1000.00'),
+            '25 Snacks': Decimal('3000.00'),
+            '25 Juices': Decimal('2700.00'),
+            'Mega Mix': Decimal('5500.00'),
+        }
+        
+        # Check if this bundle type has a fixed price
+        bundle_name = self.bundle_type.name if self.bundle_type else ''
+        if bundle_name in bundle_revenue_prices:
+            # Use fixed revenue price for predefined bundles
+            self.total_revenue = bundle_revenue_prices[bundle_name]
+        else:
+            # For custom orders, calculate revenue from item sell prices
+            self.total_revenue = sum(
+                (item.item.sell_price * item.quantity) if item.item.sell_price else Decimal('0.00')
+                for item in order_items
+            )
+        
+        # Always calculate cost from items - ensure cost_price exists
+        self.total_cost = Decimal('0.00')
+        for item in order_items:
+            if item.item.cost_price:
+                self.total_cost += item.item.cost_price * Decimal(str(item.quantity))
+        
         self.net_profit = self.total_revenue - self.total_cost
         
         if self.total_revenue > 0:
@@ -142,14 +163,25 @@ class Order(models.Model):
         else:
             self.profit_margin = 0
         
-        self.save()
+        # Update fields directly in database without triggering save() to avoid recursion
+        if self.id:
+            Order.objects.filter(id=self.id).update(
+                total_revenue=self.total_revenue,
+                total_cost=self.total_cost,
+                net_profit=self.net_profit,
+                profit_margin=self.profit_margin
+            )
     
     def save(self, *args, **kwargs):
         """Override save to auto-calculate totals"""
+        # Save first to get an ID if this is a new object
         super().save(*args, **kwargs)
         # Calculate totals after order items are saved
+        # calculate_totals() uses update() to avoid recursion
         if self.id:
             self.calculate_totals()
+            # Refresh from database to get updated values
+            self.refresh_from_db()
 
 
 class OrderItem(models.Model):

@@ -37,8 +37,8 @@ class BundleTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'email', 'phone', 'order_count', 'created_at']
-    search_fields = ['name', 'email', 'phone']
+    list_display = ['name', 'phone', 'pickup_spot', 'order_count', 'created_at']
+    search_fields = ['name', 'phone', 'pickup_spot']
     readonly_fields = ['created_at']
     
     def order_count(self, obj):
@@ -57,7 +57,7 @@ class OrderItemInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     list_display = ['id', 'customer', 'bundle_type', 'status', 'total_revenue', 'net_profit', 'profit_margin', 'created_at']
     list_filter = ['status', 'created_at', 'bundle_type']
-    search_fields = ['customer__name', 'customer__email']
+    search_fields = ['customer__name', 'customer__phone', 'customer__pickup_spot']
     readonly_fields = ['total_revenue', 'total_cost', 'net_profit', 'profit_margin', 'created_at', 'updated_at']
     inlines = [OrderItemInline]
     

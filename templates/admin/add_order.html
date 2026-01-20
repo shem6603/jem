@@ -1,0 +1,550 @@
+{% extends 'admin/base.html' %}
+{% load static %}
+
+{% block title %}Add Order - J.E.M Admin{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-black text-gray-900 mb-2">Add New Order</h1>
+    <p class="text-gray-600">Select order type and items from inventory</p>
+</div>
+
+<div class="max-w-4xl">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Order Date (always shown) -->
+            <div class="border-b border-gray-200 pb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Order Date <span class="text-red-500">*</span></h2>
+                <input type="date" id="order_date" name="order_date" required
+                       class="w-full md:w-1/3 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                       value="{{ order_date|default:'' }}">
+                <p class="mt-2 text-xs text-gray-500">Select the date for this order</p>
+            </div>
+            
+            <!-- Customer Information -->
+            <div class="border-b border-gray-200 pb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Customer Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label for="customer_name" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Customer Name <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="customer_name" name="customer_name" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                               placeholder="John Doe" value="{{ customer_name|default:'' }}">
+                    </div>
+                    <div>
+                        <label for="customer_phone" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Phone
+                        </label>
+                        <input type="text" id="customer_phone" name="customer_phone"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                               placeholder="(876) 123-4567" value="{{ customer_phone|default:'' }}">
+                    </div>
+                    <div>
+                        <label for="pickup_spot" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Pickup Spot <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="pickup_spot" name="pickup_spot" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                               placeholder="e.g., School, Home, Office" value="{{ pickup_spot|default:'' }}">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Use Inventory Toggle -->
+            <div class="border-b border-gray-200 pb-6">
+                <div class="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <input type="checkbox" id="use_inventory" name="use_inventory" 
+                           class="w-5 h-5 text-blue-500 border-gray-300 rounded focus:ring-blue-500"
+                           onchange="toggleInventorySelection()" {% if use_inventory %}checked{% endif %}>
+                    <label for="use_inventory" class="text-sm font-semibold text-gray-900 cursor-pointer flex-1">
+                        <span class="text-lg">📦</span> Use Inventory
+                        <span class="block text-xs text-gray-600 mt-1 font-normal">Check this to select items from inventory and deduct stock. Uncheck to add back-dated orders without affecting inventory.</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Order Type Selection (always shown) -->
+            <div class="border-b border-gray-200 pb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Order Type <span class="text-red-500">*</span></h2>
+                <select id="order_type" name="order_type" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                        onchange="updateOrderType()">
+                    <option value="">Select order type...</option>
+                    <option value="10_snacks" {% if order_type == '10_snacks' %}selected{% endif %}>10 Snacks</option>
+                    <option value="25_snacks" {% if order_type == '25_snacks' %}selected{% endif %}>25 Snacks</option>
+                    <option value="25_juices" {% if order_type == '25_juices' %}selected{% endif %}>25 Juices</option>
+                    <option value="mega_mix" {% if order_type == 'mega_mix' %}selected{% endif %}>Mega Mix (30 Snacks + 24 Juices)</option>
+                    <option value="custom" {% if order_type == 'custom' %}selected{% endif %}>Custom</option>
+                </select>
+                
+                <!-- Custom Order Name Input -->
+                <div id="custom-name-input" class="mt-4" style="display: none;">
+                    <label for="custom_order_name" class="block text-sm font-semibold text-gray-700 mb-2">
+                        Custom Order Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" id="custom_order_name" name="custom_order_name"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                           placeholder="e.g., Special Bundle, School Order, etc." value="{{ custom_order_name|default:'' }}">
+                </div>
+                
+                <!-- Order Type Info (only shown when Use Inventory is checked) -->
+                <div id="order-type-info" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg" style="display: none;">
+                    <p class="text-sm text-blue-800 font-medium" id="order-type-text"></p>
+                </div>
+            </div>
+            
+            <!-- Items Selection (only shown when Use Inventory is checked) -->
+            <div id="items-selection" style="display: none;">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Select Items from Inventory</h2>
+                
+                <!-- Snacks Section -->
+                <div id="snacks-section" class="mb-6" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                        <span class="mr-2">🍟</span> Snacks
+                        <span id="snacks-required" class="ml-3 px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-semibold rounded-full"></span>
+                    </h3>
+                    <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <div class="space-y-3 max-h-96 overflow-y-auto">
+                            {% for snack in snacks %}
+                            <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:border-yellow-400 transition" data-cost="{{ snack.cost_price }}" data-sell-price="{% if snack.sell_price %}{{ snack.sell_price }}{% else %}0{% endif %}">
+                                <div class="flex items-center flex-1">
+                                    {% if snack.image %}
+                                    <img src="{{ snack.image.url }}" alt="{{ snack.name }}" class="w-12 h-12 rounded-lg object-cover mr-3" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-3" style="display: none;">
+                                        <span class="text-xl">🍟</span>
+                                    </div>
+                                    {% else %}
+                                    <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                                        <span class="text-xl">🍟</span>
+                                    </div>
+                                    {% endif %}
+                                    <div class="flex-1">
+                                        <span class="font-semibold text-gray-900">{{ snack.name }}</span>
+                                        {% if snack.is_spicy %}<span class="ml-2 text-red-600">🌶️</span>{% endif %}
+                                        <p class="text-xs text-gray-500">Cost: ${{ snack.cost_price|floatformat:2 }} per unit | Stock: {{ snack.current_stock }} units</p>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <label for="snack_{{ snack.id }}" class="text-sm font-medium text-gray-700">Qty:</label>
+                                        <input type="number" id="snack_{{ snack.id }}" name="snack_{{ snack.id }}" 
+                                               min="0" max="{{ snack.current_stock }}" value="0"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition text-center"
+                                               onchange="updateTotals()">
+                                        <span class="text-xs text-gray-500">(max: {{ snack.current_stock }})</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <p class="text-gray-500 text-center py-4">No snacks available in inventory</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Juices Section -->
+                <div id="juices-section" class="mb-6" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                        <span class="mr-2">🧃</span> Juices
+                        <span id="juices-required" class="ml-3 px-3 py-1 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full"></span>
+                    </h3>
+                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <div class="space-y-3 max-h-96 overflow-y-auto">
+                            {% for juice in juices %}
+                            <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-400 transition" data-cost="{{ juice.cost_price }}" data-sell-price="{% if juice.sell_price %}{{ juice.sell_price }}{% else %}0{% endif %}">
+                                <div class="flex items-center flex-1">
+                                    {% if juice.image %}
+                                    <img src="{{ juice.image.url }}" alt="{{ juice.name }}" class="w-12 h-12 rounded-lg object-cover mr-3" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3" style="display: none;">
+                                        <span class="text-xl">🧃</span>
+                                    </div>
+                                    {% else %}
+                                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                        <span class="text-xl">🧃</span>
+                                    </div>
+                                    {% endif %}
+                                    <div class="flex-1">
+                                        <span class="font-semibold text-gray-900">{{ juice.name }}</span>
+                                        <p class="text-xs text-gray-500">Cost: ${{ juice.cost_price|floatformat:2 }} per unit | Stock: {{ juice.current_stock }} units</p>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <label for="juice_{{ juice.id }}" class="text-sm font-medium text-gray-700">Qty:</label>
+                                        <input type="number" id="juice_{{ juice.id }}" name="juice_{{ juice.id }}" 
+                                               min="0" max="{{ juice.current_stock }}" value="0"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-center"
+                                               onchange="updateTotals()">
+                                        <span class="text-xs text-gray-500">(max: {{ juice.current_stock }})</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <p class="text-gray-500 text-center py-4">No juices available in inventory</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Manual Financial Inputs (shown when Use Inventory is NOT checked) -->
+            <div id="manual-financial-inputs" class="border-b border-gray-200 pb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Financial Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label for="total_revenue" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Revenue <span class="text-red-500">*</span>
+                            <span id="revenue-auto-label" class="ml-2 text-xs text-blue-600 font-normal" style="display: none;">(Auto-filled)</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <input type="number" id="total_revenue" name="total_revenue" step="0.01" min="0"
+                                   class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                                   placeholder="0.00" value="{{ total_revenue|default:'' }}" oninput="calculateManualProfit()">
+                        </div>
+                        <p id="revenue-info" class="mt-1 text-xs text-gray-500"></p>
+                    </div>
+                    <div>
+                        <label for="total_cost" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Total Cost <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <input type="number" id="total_cost" name="total_cost" step="0.01" min="0"
+                                   class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition"
+                                   placeholder="0.00" value="{{ total_cost|default:'' }}" oninput="calculateManualProfit()">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="net_profit" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Profit
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <input type="number" id="net_profit" name="net_profit" step="0.01" readonly
+                                   class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 font-semibold"
+                                   placeholder="0.00" value="{{ net_profit|default:'' }}">
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Auto-calculated: Revenue - Total Cost</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Order Summary (only shown when Use Inventory is checked) -->
+            <div id="order-summary" class="bg-gray-50 rounded-lg p-6 border border-gray-200" style="display: none;">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Order Summary</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Cost</p>
+                        <p class="text-2xl font-bold text-gray-900" id="total-cost">$0.00</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Revenue</p>
+                        <p class="text-2xl font-bold text-blue-600" id="total-revenue">$0.00</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Profit</p>
+                        <p class="text-2xl font-bold text-green-600" id="total-profit">$0.00</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Back-Dated Order Notice -->
+            <div id="backdated-notice" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4" style="display: none;">
+                <p class="text-sm text-yellow-800 font-medium">
+                    ⚠️ Back-dated order: Enter financial information manually. Inventory will not be affected.
+                </p>
+            </div>
+            
+            <!-- Form Actions -->
+            <div class="flex space-x-4 pt-4 border-t border-gray-200">
+                <button type="submit" class="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-lg hover:shadow-lg transition transform hover:scale-105">
+                    Create Order
+                </button>
+                <a href="{% url 'admin_order_records' %}" class="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleInventorySelection() {
+    const useInventory = document.getElementById('use_inventory').checked;
+    const manualFinancialInputs = document.getElementById('manual-financial-inputs');
+    const backdatedNotice = document.getElementById('backdated-notice');
+    const itemsSelection = document.getElementById('items-selection');
+    const orderSummary = document.getElementById('order-summary');
+    const orderTypeSelect = document.getElementById('order_type');
+    const orderDateInput = document.getElementById('order_date');
+    const revenueInput = document.getElementById('total_revenue');
+    const costInput = document.getElementById('total_cost');
+    const profitInput = document.getElementById('net_profit');
+    
+    if (useInventory) {
+        // Show inventory selection, hide manual financial inputs
+        manualFinancialInputs.style.display = 'none';
+        backdatedNotice.style.display = 'none';
+        itemsSelection.style.display = 'block';
+        orderSummary.style.display = 'block';
+        
+        // Make financial inputs not required
+        if (revenueInput) revenueInput.required = false;
+        if (costInput) costInput.required = false;
+        
+        // Set default date to today if not set
+        if (orderDateInput && !orderDateInput.value) {
+            const today = new Date().toISOString().split('T')[0];
+            orderDateInput.value = today;
+        }
+        
+        // If order type is already selected, show items
+        if (orderTypeSelect && orderTypeSelect.value) {
+            updateOrderType();
+        }
+    } else {
+        // Show manual financial inputs, hide inventory selection
+        manualFinancialInputs.style.display = 'block';
+        backdatedNotice.style.display = 'block';
+        itemsSelection.style.display = 'none';
+        orderSummary.style.display = 'none';
+        
+        // Make financial inputs required
+        if (revenueInput) revenueInput.required = true;
+        if (costInput) costInput.required = true;
+        
+        // Set default date to today if not set
+        if (orderDateInput && !orderDateInput.value) {
+            const today = new Date().toISOString().split('T')[0];
+            orderDateInput.value = today;
+        }
+        
+        // Update revenue based on order type if selected
+        if (orderTypeSelect && orderTypeSelect.value) {
+            updateOrderType();
+        }
+    }
+}
+
+function calculateManualProfit() {
+    const revenue = parseFloat(document.getElementById('total_revenue').value) || 0;
+    const cost = parseFloat(document.getElementById('total_cost').value) || 0;
+    const profit = revenue - cost;
+    document.getElementById('net_profit').value = profit.toFixed(2);
+}
+
+function updateOrderType() {
+    const useInventory = document.getElementById('use_inventory').checked;
+    const orderType = document.getElementById('order_type').value;
+    
+    // Fixed revenue prices based on order type
+    const revenuePrices = {
+        '10_snacks': 1000.00,
+        '25_snacks': 3000.00,
+        '25_juices': 2700.00,
+        'mega_mix': 5500.00
+    };
+    
+    // Update revenue field when Use Inventory is unchecked
+    if (!useInventory) {
+        const revenueInput = document.getElementById('total_revenue');
+        const revenueAutoLabel = document.getElementById('revenue-auto-label');
+        const revenueInfo = document.getElementById('revenue-info');
+        
+        if (revenuePrices.hasOwnProperty(orderType)) {
+            // Auto-fill revenue for predefined order types
+            revenueInput.value = revenuePrices[orderType].toFixed(2);
+            revenueInput.readOnly = true;
+            revenueInput.classList.add('bg-gray-50');
+            revenueAutoLabel.style.display = 'inline';
+            revenueInfo.textContent = 'Revenue is automatically set based on order type.';
+            revenueInfo.className = 'mt-1 text-xs text-blue-600';
+        } else if (orderType === 'custom') {
+            // Allow manual entry for custom orders
+            revenueInput.readOnly = false;
+            revenueInput.classList.remove('bg-gray-50');
+            revenueAutoLabel.style.display = 'none';
+            revenueInfo.textContent = 'Enter revenue manually for custom orders.';
+            revenueInfo.className = 'mt-1 text-xs text-gray-500';
+            if (!revenueInput.value) {
+                revenueInput.value = '';
+            }
+        } else {
+            // No order type selected
+            revenueInput.value = '';
+            revenueInput.readOnly = false;
+            revenueInput.classList.remove('bg-gray-50');
+            revenueAutoLabel.style.display = 'none';
+            revenueInfo.textContent = '';
+        }
+        calculateManualProfit();
+    }
+    
+    // Only show inventory selection when Use Inventory is checked
+    if (!useInventory) {
+        return;
+    }
+    
+    const itemsSelection = document.getElementById('items-selection');
+    const snacksSection = document.getElementById('snacks-section');
+    const juicesSection = document.getElementById('juices-section');
+    const customNameInput = document.getElementById('custom-name-input');
+    const orderTypeInfo = document.getElementById('order-type-info');
+    const snacksRequired = document.getElementById('snacks-required');
+    const juicesRequired = document.getElementById('juices-required');
+    
+    // Hide all sections first
+    itemsSelection.style.display = 'none';
+    snacksSection.style.display = 'none';
+    juicesSection.style.display = 'none';
+    customNameInput.style.display = 'none';
+    orderTypeInfo.style.display = 'none';
+    
+    if (!orderType) {
+        return;
+    }
+    
+    // Show items selection
+    itemsSelection.style.display = 'block';
+    orderTypeInfo.style.display = 'block';
+    
+    if (orderType === '10_snacks') {
+        snacksSection.style.display = 'block';
+        snacksRequired.textContent = 'Required: 10';
+        juicesRequired.textContent = '';
+        orderTypeInfo.querySelector('#order-type-text').textContent = 'Select exactly 10 snacks from the list below.';
+    } else if (orderType === '25_snacks') {
+        snacksSection.style.display = 'block';
+        snacksRequired.textContent = 'Required: 25';
+        juicesRequired.textContent = '';
+        orderTypeInfo.querySelector('#order-type-text').textContent = 'Select exactly 25 snacks from the list below.';
+    } else if (orderType === '25_juices') {
+        juicesSection.style.display = 'block';
+        snacksRequired.textContent = '';
+        juicesRequired.textContent = 'Required: 25';
+        orderTypeInfo.querySelector('#order-type-text').textContent = 'Select exactly 25 juices from the list below.';
+    } else if (orderType === 'mega_mix') {
+        snacksSection.style.display = 'block';
+        juicesSection.style.display = 'block';
+        snacksRequired.textContent = 'Required: 30';
+        juicesRequired.textContent = 'Required: 24';
+        orderTypeInfo.querySelector('#order-type-text').textContent = 'Select exactly 30 snacks and 24 juices from the lists below.';
+    } else if (orderType === 'custom') {
+        customNameInput.style.display = 'block';
+        snacksSection.style.display = 'block';
+        juicesSection.style.display = 'block';
+        snacksRequired.textContent = 'Optional';
+        juicesRequired.textContent = 'Optional';
+        orderTypeInfo.querySelector('#order-type-text').textContent = 'Enter a custom order name and select any items you want.';
+    }
+    
+    updateTotals();
+}
+
+function updateTotals() {
+    const summaryDiv = document.getElementById('order-summary');
+    const orderType = document.getElementById('order_type').value;
+    let totalCost = 0;
+    let totalRevenue = 0;
+    let hasItems = false;
+    
+    // Fixed revenue prices based on order type
+    const revenuePrices = {
+        '10_snacks': 1000.00,
+        '25_snacks': 3000.00,
+        '25_juices': 2700.00,
+        'mega_mix': 5500.00
+    };
+    
+    // Get all quantity inputs
+    const snackInputs = document.querySelectorAll('input[name^="snack_"]');
+    const juiceInputs = document.querySelectorAll('input[name^="juice_"]');
+    
+    // Calculate total cost from items
+    snackInputs.forEach(input => {
+        const quantity = parseInt(input.value) || 0;
+        if (quantity > 0) {
+            hasItems = true;
+            const itemRow = input.closest('[data-cost]');
+            if (itemRow) {
+                const costPerUnit = parseFloat(itemRow.getAttribute('data-cost')) || 0;
+                totalCost += costPerUnit * quantity;
+            }
+        }
+    });
+    
+    juiceInputs.forEach(input => {
+        const quantity = parseInt(input.value) || 0;
+        if (quantity > 0) {
+            hasItems = true;
+            const itemRow = input.closest('[data-cost]');
+            if (itemRow) {
+                const costPerUnit = parseFloat(itemRow.getAttribute('data-cost')) || 0;
+                totalCost += costPerUnit * quantity;
+            }
+        }
+    });
+    
+    // Set revenue based on order type (fixed prices for predefined types)
+    if (revenuePrices.hasOwnProperty(orderType)) {
+        totalRevenue = revenuePrices[orderType];
+    } else if (orderType === 'custom') {
+        // For custom orders, calculate revenue from item sell prices
+        snackInputs.forEach(input => {
+            const quantity = parseInt(input.value) || 0;
+            if (quantity > 0) {
+                const itemRow = input.closest('[data-cost]');
+                if (itemRow) {
+                    const sellPricePerUnit = parseFloat(itemRow.getAttribute('data-sell-price')) || 0;
+                    totalRevenue += sellPricePerUnit * quantity;
+                }
+            }
+        });
+        
+        juiceInputs.forEach(input => {
+            const quantity = parseInt(input.value) || 0;
+            if (quantity > 0) {
+                const itemRow = input.closest('[data-cost]');
+                if (itemRow) {
+                    const sellPricePerUnit = parseFloat(itemRow.getAttribute('data-sell-price')) || 0;
+                    totalRevenue += sellPricePerUnit * quantity;
+                }
+            }
+        });
+    }
+    
+    // Show summary if order type is selected (even if no items selected yet for predefined types)
+    if (orderType && (hasItems || revenuePrices.hasOwnProperty(orderType))) {
+        summaryDiv.style.display = 'block';
+        const totalProfit = totalRevenue - totalCost;
+        
+        document.getElementById('total-cost').textContent = '$' + totalCost.toFixed(2);
+        document.getElementById('total-revenue').textContent = '$' + totalRevenue.toFixed(2);
+        document.getElementById('total-profit').textContent = '$' + totalProfit.toFixed(2);
+        
+        // Update profit color
+        const profitElement = document.getElementById('total-profit');
+        if (totalProfit >= 0) {
+            profitElement.className = 'text-2xl font-bold text-green-600';
+        } else {
+            profitElement.className = 'text-2xl font-bold text-red-600';
+        }
+    } else {
+        summaryDiv.style.display = 'none';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const useInventory = document.getElementById('use_inventory');
+    toggleInventorySelection(); // Initialize based on checkbox state
+    
+    // Update order type to set revenue if order type is already selected
+    const orderType = document.getElementById('order_type').value;
+    if (orderType) {
+        updateOrderType();
+    }
+});
+</script>
+{% endblock %}
