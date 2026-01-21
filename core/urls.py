@@ -16,6 +16,7 @@ urlpatterns = [
     path('order/status/<str:order_ref>/', views.order_status, name='order_status'),
     path('check-order/', views.check_order, name='check_order'),
     path('clear-session/', views.clear_bundle_session, name='clear_bundle_session'),
+    path('offline/', views.offline, name='offline'),
     
     # Legacy routes (redirects)
     path('new-order/', views.bundle_builder, name='bundle_builder_legacy'),

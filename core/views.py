@@ -16,6 +16,11 @@ def csrf_failure(request, reason=""):
     return redirect('core:home')
 
 
+def offline(request):
+    """Offline page for PWA"""
+    return render(request, 'core/offline.html')
+
+
 def is_staff_user(user):
     """Check if user is staff"""
     return user.is_authenticated and user.is_staff

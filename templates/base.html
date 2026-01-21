@@ -1,4 +1,5 @@
 {% load static %}
+{% load pwa %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,10 +7,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="J.E.M - Just Eat More. Premium snack bundles for kids in Jamaica. Perfect for lunch boxes, after-school treats, and class parties.">
     <meta name="keywords" content="snacks, juice, kids, lunch box, Jamaica, bundle, school snacks">
+    <meta name="theme-color" content="#F97316">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="J.E.M">
     <title>{% block title %}J.E.M - Just Eat More{% endblock %}</title>
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{% static 'favicons/favicon.png' %}">
-    <link rel="apple-touch-icon" href="{% static 'favicons/favicon.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'favicons/icon-192.png' %}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{% static 'favicons/icon-192.png' %}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{% static 'favicons/icon-512.png' %}">
+    <!-- PWA -->
+    {% progressive_web_app_meta %}
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->

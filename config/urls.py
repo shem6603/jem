@@ -84,6 +84,9 @@ urlpatterns = [
     
     # Core app routes
     path('', include('core.urls')),
+    
+    # PWA routes
+    path('', include('pwa.urls')),
 ]
 
 # Serve media files - use custom view that works in production
