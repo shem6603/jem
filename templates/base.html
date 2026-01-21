@@ -309,5 +309,20 @@
         }, 5000);
     </script>
     {% block extra_js %}{% endblock %}
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                // Use django-pwa's service worker endpoint (root level)
+                navigator.serviceWorker.register('/serviceworker.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    }, function(err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>

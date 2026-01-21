@@ -243,13 +243,25 @@ PWA_APP_ICONS = [
         'src': '/static/favicons/icon-192.png',
         'sizes': '192x192',
         'type': 'image/png',
-        'purpose': 'any maskable'
+        'purpose': 'any'
     },
     {
         'src': '/static/favicons/icon-512.png',
         'sizes': '512x512',
         'type': 'image/png',
-        'purpose': 'any maskable'
+        'purpose': 'any'
+    },
+    {
+        'src': '/static/favicons/icon-192.png',
+        'sizes': '192x192',
+        'type': 'image/png',
+        'purpose': 'maskable'
+    },
+    {
+        'src': '/static/favicons/icon-512.png',
+        'sizes': '512x512',
+        'type': 'image/png',
+        'purpose': 'maskable'
     }
 ]
 PWA_APP_SPLASH_SCREEN = [
@@ -261,9 +273,22 @@ PWA_APP_SPLASH_SCREEN = [
 PWA_APP_DIR = 'ltr'
 PWA_APP_LANG = 'en-US'
 PWA_APP_SHORT_NAME = 'J.E.M'
-PWA_APP_ID = 'com.jem.justeatmore'
-PWA_APP_CATEGORY = 'food'
+PWA_APP_ID = '/jem-app/'
 PWA_SERVICE_WORKER_PATH = os.path.join(BASE_DIR, 'static', 'js', 'serviceworker.js')
+
+# PWA Screenshots for app store (replace with actual screenshots)
+PWA_APP_SCREENSHOTS = [
+    {
+        'src': '/static/screenshots/screenshot-wide.png',
+        'sizes': '1280x720',
+        'type': 'image/png'
+    },
+    {
+        'src': '/static/screenshots/screenshot-mobile.png',
+        'sizes': '540x720',
+        'type': 'image/png'
+    }
+]
 
 # PWA Offline support
 PWA_APP_OFFLINE_URL = '/offline/'
