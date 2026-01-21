@@ -5,8 +5,15 @@ from django.db.models import Sum, Count, Q
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse, HttpResponseRedirect
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
 from .models import Item, BundleType, Customer, Order, OrderItem, CustomerOrder, CustomerOrderItem, BankingInfo
+
+
+def csrf_failure(request, reason=""):
+    """Custom CSRF failure view"""
+    messages.error(request, 'Security error: Invalid request. Please refresh the page and try again.')
+    return redirect('core:home')
 
 
 def is_staff_user(user):
@@ -36,25 +43,40 @@ def home(request):
 
 def dashboard(request):
     """Admin Dashboard - Profit Center"""
-    # Calculate all-time totals
-    all_orders = Order.objects.filter(status='completed')
+    # Calculate all-time totals from admin orders (Order model)
+    all_admin_orders = Order.objects.filter(status='completed')
+    admin_revenue = all_admin_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    admin_cost = all_admin_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
+    admin_profit = all_admin_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
     
-    total_revenue = all_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
-    total_cost = all_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
-    total_net_profit = all_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    # Calculate all-time totals from customer orders (CustomerOrder model)
+    all_customer_orders = CustomerOrder.objects.filter(status='completed')
+    customer_revenue = all_customer_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    customer_cost = all_customer_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
+    customer_profit = all_customer_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    
+    # Combine totals from both order types
+    total_revenue = admin_revenue + customer_revenue
+    total_cost = admin_cost + customer_cost
+    total_net_profit = admin_profit + customer_profit
     
     # Current inventory levels
     items = Item.objects.all().order_by('category', 'name')
     low_stock_items = items.filter(current_stock__lt=5)
     
-    # Recent sales (last 10 orders)
-    recent_sales = all_orders[:10]
+    # Recent sales (last 10 orders from both types)
+    recent_admin_sales = list(all_admin_orders[:10])
+    recent_customer_sales = list(all_customer_orders[:10])
+    recent_sales = (recent_admin_sales + recent_customer_sales)[:10]
     
-    # Calculate average profit margin
-    if all_orders.exists():
-        avg_margin = all_orders.aggregate(
-            avg_margin=Sum('profit_margin') / Count('id')
-        )['avg_margin'] or 0
+    # Calculate average profit margin (combining both order types)
+    total_orders_count = all_admin_orders.count() + all_customer_orders.count()
+    if total_orders_count > 0:
+        # Calculate weighted average margin
+        admin_margin_sum = all_admin_orders.aggregate(Sum('profit_margin'))['profit_margin__sum'] or Decimal('0.00')
+        customer_margin_sum = all_customer_orders.aggregate(Sum('profit_margin'))['profit_margin__sum'] or Decimal('0.00')
+        total_margin_sum = admin_margin_sum + customer_margin_sum
+        avg_margin = float(total_margin_sum) / total_orders_count if total_orders_count > 0 else 0
     else:
         avg_margin = 0
     
@@ -66,7 +88,7 @@ def dashboard(request):
         'low_stock_items': low_stock_items,
         'recent_sales': recent_sales,
         'avg_margin': avg_margin,
-        'total_orders': all_orders.count(),
+        'total_orders': total_orders_count,
     }
     
     return render(request, 'core/dashboard.html', context)
@@ -113,405 +135,38 @@ BUNDLE_REQUIREMENTS = {
 }
 
 
-def calculate_custom_bundle_quantities(selected_snacks, selected_juices, starred_snacks, starred_juices, 
-                                        required_snack_qty, required_juice_qty, target_margin=38):
-    """
-    Smart algorithm to calculate optimal quantities for custom bundles.
-    GUARANTEES at least target_margin% profit margin, and optimizes for higher margins.
-    
-    Rules:
-    1. Starred items ALWAYS get more quantity than non-starred items
-    2. For larger bundles with no stars: give more of cheaper items to boost profit
-    3. For starred cheap items: give extra of those to boost profit
-    4. For starred expensive items: still give more, but compensate by giving more cheap non-starred items
-    
-    - selected_snacks/juices: list of Item objects
-    - starred_snacks/juices: list of Item IDs that customer wants more of (max 2 each)
-    - required_snack_qty: total number of snacks customer wants
-    - required_juice_qty: total number of juices customer wants
-    - target_margin: minimum profit margin percentage (default 38%)
-    
-    Returns: dict with {item_id: quantity} and calculated price
-    """
-    # Enforce minimum margin of 38%
-    if target_margin < 38:
-        target_margin = 38
-
-    quantities = {}
-    
-    def distribute_category(items, starred_ids, required_qty):
-        """
-        Distribute quantities for a single category (snacks or juices).
-        Returns dict of {item_id: quantity}
-        """
-        if not items or required_qty <= 0:
-            return {}
-        
-        result = {}
-        
-        # Sort items by cost price (cheapest first)
-        sorted_items = sorted(items, key=lambda x: x.cost_price)
-        
-        # Separate starred and non-starred, preserving cost order
-        starred_items = [item for item in sorted_items if item.id in starred_ids]
-        regular_items = [item for item in sorted_items if item.id not in starred_ids]
-        
-        num_starred = len(starred_items)
-        num_regular = len(regular_items)
-        num_total = len(items)
-        
-        # Initialize all to 0
-        for item in items:
-            result[item.id] = 0
-        
-        # Helper: weight by inverse cost (cheaper gets more)
-        def weight_by_inverse_cost(item):
-            # Avoid divide-by-zero, favor cheaper items
-            return float(1 / (item.cost_price + Decimal('0.01')))
-
-        # CASE 1: Small bundle (10-15 items) with no stars
-        # Still favor cheaper items slightly (not perfectly even)
-        if num_starred == 0 and required_qty <= 15:
-            # Minimum 1 each, then allocate remainder by inverse cost weights
-            for item in sorted_items:
-                result[item.id] = 1
-            remaining = required_qty - num_total
-            if remaining > 0:
-                weights = [weight_by_inverse_cost(item) for item in sorted_items]
-                total_weight = sum(weights)
-                # Allocate by weight
-                for i, item in enumerate(sorted_items):
-                    extra = int(remaining * weights[i] / total_weight)
-                    result[item.id] += extra
-                # Fix rounding remainder by giving to cheapest items
-                while sum(result.values()) < required_qty:
-                    for item in sorted_items:
-                        if sum(result.values()) >= required_qty:
-                            break
-                        result[item.id] += 1
-            return result
-        
-        # CASE 2: Larger bundle with no stars - strongly favor cheaper items
-        if num_starred == 0:
-            # Minimum 1 each, then allocate remainder using inverse-cost weights
-            for item in sorted_items:
-                result[item.id] = 1
-            remaining = required_qty - num_total
-            if remaining > 0:
-                weights = [weight_by_inverse_cost(item) for item in sorted_items]
-                total_weight = sum(weights)
-                for i, item in enumerate(sorted_items):
-                    extra = int(remaining * weights[i] / total_weight)
-                    result[item.id] += extra
-                # Fix rounding remainder by giving to cheapest items
-                while sum(result.values()) < required_qty:
-                    for item in sorted_items:
-                        if sum(result.values()) >= required_qty:
-                            break
-                        result[item.id] += 1
-            # If we over-allocated, reduce from most expensive first
-            while sum(result.values()) > required_qty:
-                for item in reversed(sorted_items):
-                    if result[item.id] > 1 and sum(result.values()) > required_qty:
-                        result[item.id] -= 1
-            return result
-        
-        # CASE 3: Has starred items
-        # Rule: Starred items ALWAYS get more than non-starred
-        # If starred item is cheap: give even more (boosts profit)
-        # If starred item is expensive: still give more, but compensate with cheap non-starred
-        
-        # Calculate average cost to determine if starred items are cheap or expensive
-        avg_cost = sum(item.cost_price for item in items) / len(items)
-        
-        # Categorize starred items
-        cheap_starred = [item for item in starred_items if item.cost_price <= avg_cost]
-        expensive_starred = [item for item in starred_items if item.cost_price > avg_cost]
-        cheap_regular = [item for item in regular_items if item.cost_price <= avg_cost]
-        expensive_regular = [item for item in regular_items if item.cost_price > avg_cost]
-        
-        # Base quantities - starred get at least 2x what regular gets
-        # Calculate minimum base for regular items
-        if num_regular > 0:
-            # Regular items get minimum 1 each
-            regular_base = max(1, required_qty // (num_total + num_starred))  # starred counted twice
-        else:
-            regular_base = 0
-        
-        # Starred items get at least 2x regular base
-        starred_base = max(regular_base * 2, 2) if num_starred > 0 else 0
-        
-        # Assign base quantities
-        for item in regular_items:
-            result[item.id] = regular_base
-        for item in starred_items:
-            result[item.id] = starred_base
-        
-        # Calculate how many we've allocated
-        allocated = sum(result.values())
-        remaining = required_qty - allocated
-        
-        if remaining > 0:
-            # Distribute remaining items strategically
-            # Priority order:
-            # 1. Cheap starred items (boosts profit AND customer gets more of what they want)
-            # 2. Cheap regular items (boosts profit)
-            # 3. Expensive starred items (customer wants more)
-            # 4. Expensive regular items (last resort)
-            
-            priority_order = cheap_starred + cheap_regular + expensive_starred + expensive_regular
-            
-            # First pass: give extra to cheap starred items
-            for item in cheap_starred:
-                if remaining <= 0:
-                    break
-                # Give them extra - up to 50% more than current
-                extra = max(1, result[item.id] // 2)
-                extra = min(extra, remaining)
-                result[item.id] += extra
-                remaining -= extra
-            
-            # Second pass: distribute to cheap regular items (weighted, still keep starred higher)
-            if remaining > 0 and cheap_regular:
-                weights = [weight_by_inverse_cost(item) for item in cheap_regular]
-                total_weight = sum(weights)
-                for i, item in enumerate(cheap_regular):
-                    if remaining <= 0:
-                        break
-                    extra = int(remaining * weights[i] / total_weight)
-                    min_starred_qty = min(result[s.id] for s in starred_items) if starred_items else float('inf')
-                    # Keep regular below starred
-                    max_extra = max(0, min_starred_qty - 1 - result[item.id])
-                    extra = min(extra, max_extra)
-                    result[item.id] += extra
-                # Remainder to cheapest regular, still below starred
-                while remaining > 0:
-                    gave_any = False
-                    for item in cheap_regular:
-                        min_starred_qty = min(result[s.id] for s in starred_items) if starred_items else float('inf')
-                        if remaining <= 0:
-                            break
-                        if result[item.id] + 1 < min_starred_qty:
-                            result[item.id] += 1
-                            remaining -= 1
-                            gave_any = True
-                    if not gave_any:
-                        break
-            
-            # Third pass: give LIMITED amount to expensive starred (customer wants it, but don't hurt margin too much)
-            # Only give a small amount to expensive starred, then prioritize cheap items
-            expensive_starred_limit = min(len(expensive_starred), remaining // 3) if expensive_starred else 0
-            for i, item in enumerate(expensive_starred):
-                if remaining <= 0 or i >= expensive_starred_limit:
-                    break
-                result[item.id] += 1
-                remaining -= 1
-            
-            # Fourth pass: any remaining goes to cheapest items
-            while remaining > 0:
-                for item in sorted_items:
-                    if remaining <= 0:
-                        break
-                    # For non-starred, ensure starred still have more
-                    if item.id not in starred_ids:
-                        min_starred_qty = min(result[s.id] for s in starred_items) if starred_items else float('inf')
-                        if result[item.id] + 1 >= min_starred_qty:
-                            continue
-                    result[item.id] += 1
-                    remaining -= 1
-        
-        elif remaining < 0:
-            # Over-allocated, need to reduce
-            # Reduce from expensive non-starred first, then expensive starred
-            # But NEVER let non-starred exceed starred
-            
-            reduction_order = list(reversed(expensive_regular)) + list(reversed(cheap_regular)) + \
-                             list(reversed(expensive_starred)) + list(reversed(cheap_starred))
-            
-            while sum(result.values()) > required_qty:
-                reduced = False
-                for item in reduction_order:
-                    if result[item.id] > 1:
-                        # For starred items, only reduce if we must
-                        if item.id in starred_ids:
-                            # Check if any regular item has same or more
-                            max_regular = max((result[r.id] for r in regular_items), default=0)
-                            if result[item.id] <= max_regular + 1:
-                                continue  # Don't reduce starred below regular
-                        result[item.id] -= 1
-                        reduced = True
-                        break
-                if not reduced:
-                    break
-        
-        # Final validation: ensure starred items have more than non-starred
-        if starred_items and regular_items:
-            min_starred = min(result[item.id] for item in starred_items)
-            max_regular = max(result[item.id] for item in regular_items)
-            
-            if max_regular >= min_starred:
-                # Need to rebalance - take from expensive regular, give to starred
-                iterations = 0
-                while max_regular >= min_starred and iterations < 100:
-                    # Find the regular item with most quantity (prefer expensive)
-                    regular_by_qty = sorted(regular_items, key=lambda x: (-result[x.id], -x.cost_price))
-                    # Find starred item with least quantity
-                    starred_by_qty = sorted(starred_items, key=lambda x: result[x.id])
-                    
-                    if regular_by_qty and result[regular_by_qty[0].id] > 1:
-                        result[regular_by_qty[0].id] -= 1
-                        result[starred_by_qty[0].id] += 1
-                    else:
-                        break
-                    
-                    min_starred = min(result[item.id] for item in starred_items)
-                    max_regular = max(result[item.id] for item in regular_items)
-                    iterations += 1
-        
-        return result
-    
-    # Process snacks
-    snack_quantities = distribute_category(selected_snacks, starred_snacks, required_snack_qty)
-    quantities.update(snack_quantities)
-    
-    # Process juices
-    juice_quantities = distribute_category(selected_juices, starred_juices, required_juice_qty)
-    quantities.update(juice_quantities)
-    
-    # Calculate total cost
-    all_items_dict = {item.id: item for item in selected_snacks + selected_juices}
-    total_cost = sum(
-        all_items_dict[item_id].cost_price * Decimal(str(qty))
-        for item_id, qty in quantities.items()
-        if qty > 0
-    )
-    
-    # Calculate price to achieve AT LEAST target margin
-    # revenue = cost / (1 - target_margin/100)
-    margin_factor = Decimal(str(1 - target_margin / 100))
-    if margin_factor > 0 and total_cost > 0:
-        suggested_price = total_cost / margin_factor
-        # Round up to nearest 100 (this will push margin above target)
-        suggested_price = (int(suggested_price / 100) + 1) * 100
-    else:
-        suggested_price = Decimal('0')
-    
-    # Calculate actual margin achieved
-    actual_margin = Decimal('0')
-    if suggested_price > 0:
-        actual_margin = ((Decimal(str(suggested_price)) - total_cost) / Decimal(str(suggested_price)) * 100)
-    
-    # If margin is below target, adjust quantities to favor cheaper items more aggressively
-    max_iterations = 50
-    iteration = 0
-    
-    while actual_margin < target_margin and iteration < max_iterations and total_cost > 0:
-        iteration += 1
-        
-        # Strategy: Shift quantities from expensive items to cheaper items
-        # Sort all items by cost (cheapest first)
-        all_items_list = []
-        for item_id, qty in quantities.items():
-            if qty > 0 and item_id in all_items_dict:
-                all_items_list.append((item_id, all_items_dict[item_id], qty))
-        
-        if not all_items_list:
-            break
-        
-        # Sort by cost (cheapest first)
-        all_items_list.sort(key=lambda x: x[1].cost_price)
-        
-        # Find expensive items we can reduce and cheap items we can increase
-        expensive_items = [x for x in all_items_list if x[2] > 1]  # Items with qty > 1
-        cheap_items = [x for x in all_items_list]  # All items, cheapest first
-        
-        # Check starred constraints
-        starred_ids_set = set(starred_snacks + starred_juices)
-        
-        # Try to shift from expensive to cheap
-        shifted = False
-        
-        # Prioritize reducing expensive NON-starred items first (they hurt margin most)
-        non_starred_expensive = [x for x in expensive_items if x[0] not in starred_ids_set]
-        starred_expensive = [x for x in expensive_items if x[0] in starred_ids_set]
-        
-        # Process non-starred expensive first, then starred expensive
-        for exp_item_id, exp_item, exp_qty in reversed(non_starred_expensive + starred_expensive):
-            if shifted:
-                break
-            
-            # For starred items, check minimum constraint
-            if exp_item_id in starred_ids_set:
-                min_starred = min((qty for item_id, _, qty in all_items_list if item_id in starred_ids_set), default=0)
-                min_non_starred = min((qty for item_id, _, qty in all_items_list if item_id not in starred_ids_set), default=0)
-                # Allow reducing starred if it's significantly above non-starred (more than 2 units difference)
-                if exp_qty <= max(min_non_starred + 1, 2):
-                    continue  # Can't reduce starred below this
-            
-            # Find cheapest item to increase (prefer cheap starred if available, then cheap non-starred)
-            cheap_starred = [x for x in cheap_items if x[0] in starred_ids_set]
-            cheap_non_starred = [x for x in cheap_items if x[0] not in starred_ids_set]
-            
-            # Prefer cheap starred items, then cheap non-starred
-            for cheap_item_id, cheap_item, cheap_qty in (cheap_starred + cheap_non_starred):
-                if cheap_item_id == exp_item_id:
-                    continue
-                
-                # Don't increase non-starred above starred
-                if cheap_item_id not in starred_ids_set and exp_item_id in starred_ids_set:
-                    continue  # Can't increase non-starred above starred
-                
-                # Shift 1 unit from expensive to cheap
-                quantities[exp_item_id] -= 1
-                quantities[cheap_item_id] += 1
-                shifted = True
-                break
-        
-        if not shifted:
-            # Can't shift more, break
-            break
-        
-        # Recalculate cost and margin
-        total_cost = sum(
-            all_items_dict[item_id].cost_price * Decimal(str(qty))
-            for item_id, qty in quantities.items()
-            if qty > 0
-        )
-        
-        if margin_factor > 0 and total_cost > 0:
-            suggested_price = total_cost / margin_factor
-            suggested_price = (int(suggested_price / 100) + 1) * 100
-            actual_margin = ((Decimal(str(suggested_price)) - total_cost) / Decimal(str(suggested_price)) * 100)
-        else:
-            break
-    
-    return {
-        'quantities': quantities,
-        'total_cost': total_cost,
-        'suggested_price': Decimal(str(suggested_price)),
-        'actual_margin': actual_margin
-    }
-
-
 def bundle_builder(request):
     """Step 1: Select Bundle Type"""
     # Clear any existing session data when starting fresh
     if request.method == 'GET' and 'fresh' in request.GET:
         for key in ['bundle_type', 'excluded_snacks', 'excluded_juices', 
-                    'starred_snacks', 'starred_juices', 'custom_snack_qty', 'custom_juice_qty']:
+                    'starred_snacks', 'starred_juices', 'custom_snack_qty', 'custom_juice_qty', 'selection_mode']:
             request.session.pop(key, None)
     
     if request.method == 'POST':
         bundle_type = request.POST.get('bundle_type')
+        selection_mode = request.POST.get('selection_mode', 'select')  # 'select' or 'random'
         
         if bundle_type == 'custom':
-            # Get custom quantities
-            try:
-                custom_snack_qty = int(request.POST.get('custom_snack_qty', 0) or 0)
-                custom_juice_qty = int(request.POST.get('custom_juice_qty', 0) or 0)
-            except ValueError:
-                custom_snack_qty = 0
-                custom_juice_qty = 0
+            # Validate custom quantities using security utilities
+            from .security import validate_integer
+            
+            snack_valid, custom_snack_qty, snack_error = validate_integer(
+                request.POST.get('custom_snack_qty', 0) or 0,
+                min_value=0,
+                max_value=1000,
+                allow_zero=True
+            )
+            juice_valid, custom_juice_qty, juice_error = validate_integer(
+                request.POST.get('custom_juice_qty', 0) or 0,
+                min_value=0,
+                max_value=1000,
+                allow_zero=True
+            )
+            
+            if not snack_valid or not juice_valid:
+                messages.error(request, 'Invalid quantity values. Please enter valid numbers.')
+                return redirect('core:bundle_builder')
             
             # Validate: minimum 10 snacks OR 10 juices OR (10 snacks AND 10 juices)
             valid = False
@@ -528,11 +183,33 @@ def bundle_builder(request):
                 request.session['bundle_type'] = bundle_type
                 request.session['custom_snack_qty'] = custom_snack_qty
                 request.session['custom_juice_qty'] = custom_juice_qty
-                return redirect('core:bundle_builder_select')
+                request.session['selection_mode'] = selection_mode
+                
+                # If random mode, skip selection and go directly to details
+                if selection_mode == 'random':
+                    # Clear any previous selections
+                    request.session['excluded_snacks'] = []
+                    request.session['excluded_juices'] = []
+                    request.session['starred_snacks'] = []
+                    request.session['starred_juices'] = []
+                    return redirect('core:bundle_builder_details')
+                else:
+                    return redirect('core:bundle_builder_select')
         
         elif bundle_type in BUNDLE_REQUIREMENTS:
             request.session['bundle_type'] = bundle_type
-            return redirect('core:bundle_builder_select')
+            request.session['selection_mode'] = selection_mode
+            
+            # If random mode, skip selection and go directly to details
+            if selection_mode == 'random':
+                # Clear any previous selections
+                request.session['excluded_snacks'] = []
+                request.session['excluded_juices'] = []
+                request.session['starred_snacks'] = []
+                request.session['starred_juices'] = []
+                return redirect('core:bundle_builder_details')
+            else:
+                return redirect('core:bundle_builder_select')
         else:
             messages.error(request, 'Please select a valid bundle type.')
     
@@ -543,7 +220,7 @@ def bundle_builder(request):
 
 
 def bundle_builder_select(request):
-    """Step 2: Select items to EXCLUDE from the bundle (exclusion model)"""
+    """Step 2: Select items to INCLUDE in the bundle (inclusion model)"""
     bundle_type = request.session.get('bundle_type')
     if not bundle_type:
         messages.error(request, 'Please select a bundle type first.')
@@ -557,50 +234,80 @@ def bundle_builder_select(request):
     custom_snack_qty = request.session.get('custom_snack_qty', 0)
     custom_juice_qty = request.session.get('custom_juice_qty', 0)
     
-    # Get previously excluded items from session (items customer doesn't want)
+    # Get previously selected items from session (items customer wants)
+    # For backward compatibility, we'll convert from excluded to selected if needed
     excluded_snacks = request.session.get('excluded_snacks', [])
     excluded_juices = request.session.get('excluded_juices', [])
+    selected_snacks = request.session.get('selected_snacks', [])
+    selected_juices = request.session.get('selected_juices', [])
     starred_snacks = request.session.get('starred_snacks', [])
     starred_juices = request.session.get('starred_juices', [])
     
+    # If we have excluded items but no selected items, convert (backward compatibility)
+    if excluded_snacks or excluded_juices:
+        if not selected_snacks and not selected_juices:
+            all_snack_ids = list(all_snacks.values_list('id', flat=True))
+            all_juice_ids = list(all_juices.values_list('id', flat=True))
+            selected_snacks = [sid for sid in all_snack_ids if sid not in excluded_snacks]
+            selected_juices = [jid for jid in all_juice_ids if jid not in excluded_juices]
+            request.session['selected_snacks'] = selected_snacks
+            request.session['selected_juices'] = selected_juices
+            # Clear old excluded items
+            request.session.pop('excluded_snacks', None)
+            request.session.pop('excluded_juices', None)
+    
     if request.method == 'POST':
-        # Get excluded items (checkboxes - items customer doesn't want)
-        excluded_snack_ids = [int(x) for x in request.POST.getlist('excluded_snacks')]
-        excluded_juice_ids = [int(x) for x in request.POST.getlist('excluded_juices')]
+        # Get selected items (checkboxes - items customer wants)
+        selected_snack_ids = [int(x) for x in request.POST.getlist('selected_snacks')]
+        selected_juice_ids = [int(x) for x in request.POST.getlist('selected_juices')]
         
-        # Get starred items (max 2 each) - these are from the INCLUDED items
-        starred_snack_ids = [int(x) for x in request.POST.getlist('starred_snacks')][:2]
-        starred_juice_ids = [int(x) for x in request.POST.getlist('starred_juices')][:2]
+        # Get starred items (max 2 each) - these are from the selected items
+        # Validate IDs to prevent injection
+        from .security import validate_integer
         
-        # Calculate included items (all items minus excluded)
-        all_snack_ids = list(all_snacks.values_list('id', flat=True))
-        all_juice_ids = list(all_juices.values_list('id', flat=True))
-        included_snack_ids = [sid for sid in all_snack_ids if sid not in excluded_snack_ids]
-        included_juice_ids = [jid for jid in all_juice_ids if jid not in excluded_juice_ids]
+        starred_snack_ids = []
+        for snack_id_str in request.POST.getlist('starred_snacks')[:2]:
+            is_valid, snack_id, error = validate_integer(snack_id_str, min_value=1, allow_zero=False)
+            if is_valid:
+                starred_snack_ids.append(snack_id)
         
-        # Validation: must have at least one item included
+        starred_juice_ids = []
+        for juice_id_str in request.POST.getlist('starred_juices')[:2]:
+            is_valid, juice_id, error = validate_integer(juice_id_str, min_value=1, allow_zero=False)
+            if is_valid:
+                starred_juice_ids.append(juice_id)
+        
+        # Validation: must have at least one item selected
         errors = []
         
         if bundle_type in ['10_snacks', '25_snacks', 'mega_mix']:
-            if len(included_snack_ids) == 0:
-                errors.append('You must include at least one snack in your bundle.')
+            if len(selected_snack_ids) == 0:
+                errors.append('You must select at least one snack for your bundle.')
         if bundle_type in ['25_juices', 'mega_mix']:
-            if len(included_juice_ids) == 0:
-                errors.append('You must include at least one juice in your bundle.')
+            if len(selected_juice_ids) == 0:
+                errors.append('You must select at least one juice for your bundle.')
         elif bundle_type == 'custom':
             # Validate based on what customer requested
-            if custom_snack_qty > 0 and len(included_snack_ids) == 0:
-                errors.append(f'You must include at least one snack for your {custom_snack_qty} snacks.')
-            if custom_juice_qty > 0 and len(included_juice_ids) == 0:
-                errors.append(f'You must include at least one juice for your {custom_juice_qty} juices.')
+            if custom_snack_qty > 0 and len(selected_snack_ids) == 0:
+                errors.append(f'You must select at least one snack for your {custom_snack_qty} snacks.')
+            if custom_juice_qty > 0 and len(selected_juice_ids) == 0:
+                errors.append(f'You must select at least one juice for your {custom_juice_qty} juices.')
         
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
-            # Save to session (excluded items and starred items)
-            request.session['excluded_snacks'] = excluded_snack_ids
-            request.session['excluded_juices'] = excluded_juice_ids
+            # Save to session (selected items and starred items)
+            # Calculate excluded items (all items minus selected) for the algorithm
+            all_snack_ids = list(all_snacks.values_list('id', flat=True))
+            all_juice_ids = list(all_juices.values_list('id', flat=True))
+            excluded_snack_ids = [sid for sid in all_snack_ids if sid not in selected_snack_ids]
+            excluded_juice_ids = [jid for jid in all_juice_ids if jid not in selected_juice_ids]
+            
+            request.session['selected_snacks'] = selected_snack_ids
+            request.session['selected_juices'] = selected_juice_ids
+            request.session['excluded_snacks'] = excluded_snack_ids  # For algorithm compatibility
+            request.session['excluded_juices'] = excluded_juice_ids  # For algorithm compatibility
             request.session['starred_snacks'] = starred_snack_ids
             request.session['starred_juices'] = starred_juice_ids
             return redirect('core:bundle_builder_details')
@@ -619,8 +326,10 @@ def bundle_builder_select(request):
         'requirements': requirements,
         'snacks': all_snacks,
         'juices': all_juices,
-        'excluded_snacks': excluded_snacks,
-        'excluded_juices': excluded_juices,
+        'selected_snacks': selected_snacks,
+        'selected_juices': selected_juices,
+        'excluded_snacks': excluded_snacks,  # For backward compatibility in template
+        'excluded_juices': excluded_juices,  # For backward compatibility in template
         'starred_snacks': starred_snacks,
         'starred_juices': starred_juices,
         'show_snacks': show_snacks,
@@ -638,6 +347,8 @@ def bundle_builder_details(request):
     bundle_type = request.session.get('bundle_type')
     excluded_snacks = request.session.get('excluded_snacks', [])
     excluded_juices = request.session.get('excluded_juices', [])
+    selected_snacks = request.session.get('selected_snacks', [])
+    selected_juices = request.session.get('selected_juices', [])
     starred_snacks = request.session.get('starred_snacks', [])
     starred_juices = request.session.get('starred_juices', [])
     custom_snack_qty = request.session.get('custom_snack_qty', 0)
@@ -651,9 +362,22 @@ def bundle_builder_details(request):
     all_snacks = Item.objects.filter(category='snack', current_stock__gt=0)
     all_juices = Item.objects.filter(category='juice', current_stock__gt=0)
     
-    # Calculate included items (all items minus excluded)
-    snack_items = [item for item in all_snacks if item.id not in excluded_snacks]
-    juice_items = [item for item in all_juices if item.id not in excluded_juices]
+    # Determine which items to use: if selected items exist (inclusion model), use only those
+    # Otherwise, use all items minus excluded (exclusion model)
+    if selected_snacks or selected_juices:
+        # Inclusion model: only use selected items
+        snack_items = [item for item in all_snacks if item.id in selected_snacks]
+        juice_items = [item for item in all_juices if item.id in selected_juices]
+        # Calculate excluded items (all items minus selected) for algorithm
+        all_snack_ids = list(all_snacks.values_list('id', flat=True))
+        all_juice_ids = list(all_juices.values_list('id', flat=True))
+        excluded_item_ids = [sid for sid in all_snack_ids if sid not in selected_snacks] + \
+                           [jid for jid in all_juice_ids if jid not in selected_juices]
+    else:
+        # Exclusion model: use all items minus excluded
+        snack_items = [item for item in all_snacks if item.id not in excluded_snacks]
+        juice_items = [item for item in all_juices if item.id not in excluded_juices]
+        excluded_item_ids = excluded_snacks + excluded_juices
     
     if not snack_items and not juice_items:
         messages.error(request, 'Please include at least one item in your bundle.')
@@ -664,7 +388,7 @@ def bundle_builder_details(request):
     
     is_custom = bundle_type == 'custom'
     
-    # Get customer favorites (starred items)
+    # Get customer favorites (starred items) - must be from selected/included items
     customer_favorites = []
     for item in snack_items:
         if item.id in starred_snacks:
@@ -685,7 +409,7 @@ def bundle_builder_details(request):
         }
         
         # Run algorithm to get cost estimate first
-        result = generate_smart_bundle(bundle_config, customer_favorites)
+        result = generate_smart_bundle(bundle_config, customer_favorites, excluded_item_ids)
         
         # For custom, suggested_price is calculated based on cost + 38% margin
         total_cost = result['total_cost']
@@ -694,7 +418,7 @@ def bundle_builder_details(request):
         
         # Re-run with the calculated price to ensure margin
         bundle_config['selling_price'] = suggested_price
-        result = generate_smart_bundle(bundle_config, customer_favorites)
+        result = generate_smart_bundle(bundle_config, customer_favorites, excluded_item_ids)
         total_cost = result['total_cost']
         
     else:
@@ -711,7 +435,7 @@ def bundle_builder_details(request):
         }
         
         # Run the smart bundle algorithm
-        result = generate_smart_bundle(bundle_config, customer_favorites)
+        result = generate_smart_bundle(bundle_config, customer_favorites, excluded_item_ids)
         total_cost = result['total_cost']
         suggested_price = fixed_price
     
@@ -722,18 +446,41 @@ def bundle_builder_details(request):
     for item, qty, is_fav in result['selected_juices']:
         quantities[item.id] = qty
     
-    # Prepare items with quantities for display
-    snacks_with_qty = [(item, qty, is_fav) for item, qty, is_fav in result['selected_snacks'] if qty > 0]
-    juices_with_qty = [(item, qty, is_fav) for item, qty, is_fav in result['selected_juices'] if qty > 0]
+    # Prepare items with quantities for display (include subtotal cost)
+    snacks_with_qty = [
+        (item, qty, is_fav, item.cost_price * Decimal(str(qty))) 
+        for item, qty, is_fav in result['selected_snacks'] if qty > 0
+    ]
+    juices_with_qty = [
+        (item, qty, is_fav, item.cost_price * Decimal(str(qty))) 
+        for item, qty, is_fav in result['selected_juices'] if qty > 0
+    ]
     
     # Get banking info
     banking_info = BankingInfo.objects.filter(is_active=True).first()
     
     if request.method == 'POST':
-        customer_name = request.POST.get('customer_name', '').strip()
-        customer_phone = request.POST.get('customer_phone', '').strip()
-        customer_whatsapp = request.POST.get('customer_whatsapp', '').strip()
-        pickup_spot = request.POST.get('pickup_spot', '').strip()
+        # Sanitize and validate user inputs
+        from .security import sanitize_string, validate_phone_number
+        
+        customer_name = sanitize_string(request.POST.get('customer_name', ''), max_length=200)
+        customer_phone_raw = request.POST.get('customer_phone', '').strip()
+        customer_whatsapp_raw = request.POST.get('customer_whatsapp', '').strip()
+        pickup_spot = sanitize_string(request.POST.get('pickup_spot', ''), max_length=200)
+        
+        # Validate phone numbers
+        phone_valid, customer_phone = validate_phone_number(customer_phone_raw)
+        if not phone_valid and customer_phone_raw:
+            messages.error(request, 'Invalid phone number format. Please use format: 1-876-XXX-XXXX')
+            return redirect('core:bundle_builder_details')
+        
+        whatsapp_valid, customer_whatsapp = validate_phone_number(customer_whatsapp_raw)
+        if not whatsapp_valid and customer_whatsapp_raw:
+            messages.error(request, 'Invalid WhatsApp number format. Please use format: 1-876-XXX-XXXX')
+            return redirect('core:bundle_builder_details')
+        
+        if not customer_whatsapp:
+            customer_whatsapp = customer_phone  # Use phone if WhatsApp not provided
         
         errors = []
         if not customer_name:
@@ -857,6 +604,25 @@ def order_payment(request, order_ref):
         payment_method = request.POST.get('payment_method', '').strip()
         
         if payment_proof:
+            # Validate file upload for security
+            from .security import validate_file_upload, sanitize_string, ALLOWED_DOCUMENT_EXTENSIONS, MAX_IMAGE_SIZE
+            
+            is_valid, error_msg = validate_file_upload(
+                payment_proof, 
+                allowed_extensions=ALLOWED_DOCUMENT_EXTENSIONS,
+                max_size=MAX_IMAGE_SIZE
+            )
+            
+            if not is_valid:
+                messages.error(request, f'Security validation failed: {error_msg}')
+                return render(request, 'core/order_payment.html', {
+                    'order': order,
+                    'banking_info': banking_info,
+                })
+            
+            # Sanitize payment method
+            payment_method = sanitize_string(payment_method, max_length=50)
+            
             order.payment_proof = payment_proof
             order.payment_method = payment_method
             order.status = 'payment_uploaded'

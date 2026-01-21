@@ -34,6 +34,7 @@
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
         <h2 class="text-xl font-bold text-gray-900">All Orders</h2>
+        <p class="text-sm text-gray-500 mt-1">Includes both admin-created orders and customer orders</p>
     </div>
     <div class="overflow-x-auto">
         <table class="w-full">
@@ -50,6 +51,7 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
+                <!-- Admin Orders (Order model) -->
                 {% for order in orders %}
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -58,6 +60,7 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="font-semibold text-gray-900">{{ order.bundle_type.name }}</span>
+                        <span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">Admin</span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {{ order.customer.name }}
@@ -80,14 +83,50 @@
                         </a>
                     </td>
                 </tr>
-                {% empty %}
+                {% endfor %}
+                
+                <!-- Customer Orders (CustomerOrder model) -->
+                {% for order in customer_orders %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {{ order.created_at|date:"M d, Y" }}<br>
+                        <span class="text-xs text-gray-400">{{ order.created_at|date:"H:i" }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="font-semibold text-gray-900">{{ order.get_bundle_type_display }}</span>
+                        <span class="ml-2 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">Customer</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {{ order.customer_name }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {{ order.pickup_spot|default:"—" }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {% if order.total_revenue > 0 %}${{ order.total_revenue|floatformat:2 }}{% else %}<span class="text-gray-400">TBD</span>{% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        ${{ order.total_cost|floatformat:2 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                        {% if order.net_profit %}${{ order.net_profit|floatformat:2 }}{% else %}—{% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <a href="{% url 'admin_customer_order_detail' order.id %}" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+                
+                {% if not orders and not customer_orders %}
                 <tr>
                     <td colspan="8" class="px-6 py-12 text-center text-gray-500">
                         <div class="text-6xl mb-4">📦</div>
                         <p>No orders found</p>
                     </td>
                 </tr>
-                {% endfor %}
+                {% endif %}
             </tbody>
         </table>
     </div>

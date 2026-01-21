@@ -4,7 +4,7 @@
 {% block title %}Choose Your Bundle - J.E.M{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gradient-to-b from-orange-50 via-white to-orange-50 py-12">
+<div class="min-h-screen bg-gradient-to-b from-orange-50 via-white to-orange-50 py-8 md:py-12 pb-20 md:pb-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header -->
         <div class="text-center mb-12">
@@ -20,21 +20,21 @@
         </div>
         
         <!-- Progress Bar -->
-        <div class="flex items-center justify-center mb-12">
-            <div class="flex items-center space-x-4">
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
-                    <span class="ml-2 font-semibold text-orange-600">Bundle</span>
+        <div class="flex items-center justify-center mb-8 md:mb-12 px-2">
+            <div class="flex items-center flex-wrap justify-center gap-2 md:gap-4 max-w-full">
+                <div class="flex items-center flex-shrink-0">
+                    <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold text-sm md:text-base flex-shrink-0">1</div>
+                    <span class="ml-2 font-semibold text-orange-600 text-xs md:text-sm whitespace-nowrap">Bundle</span>
                 </div>
-                <div class="w-16 h-1 bg-gray-300"></div>
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">2</div>
-                    <span class="ml-2 text-gray-500">Select Items</span>
+                <div class="w-8 md:w-16 h-1 bg-gray-300 flex-shrink-0"></div>
+                <div class="flex items-center flex-shrink-0">
+                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold text-sm md:text-base flex-shrink-0">2</div>
+                    <span class="ml-2 text-gray-500 text-xs md:text-sm whitespace-nowrap">Select Items</span>
                 </div>
-                <div class="w-16 h-1 bg-gray-300"></div>
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">3</div>
-                    <span class="ml-2 text-gray-500">Details</span>
+                <div class="w-8 md:w-16 h-1 bg-gray-300 flex-shrink-0"></div>
+                <div class="flex items-center flex-shrink-0">
+                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold text-sm md:text-base flex-shrink-0">3</div>
+                    <span class="ml-2 text-gray-500 text-xs md:text-sm whitespace-nowrap">Details</span>
                 </div>
             </div>
         </div>
@@ -171,9 +171,49 @@
                 </label>
             </div>
             
+            <!-- Selection Mode Toggle -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-8 border-2 border-gray-200">
+                <h3 class="text-lg font-bold text-gray-900 mb-4 text-center">How would you like to choose your items?</h3>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <!-- Select Items Option -->
+                    <label class="cursor-pointer">
+                        <input type="radio" name="selection_mode" value="select" class="hidden peer" checked>
+                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border-2 border-blue-200 peer-checked:border-blue-500 peer-checked:bg-blue-200 transition-all duration-300 h-full">
+                            <div class="text-center">
+                                <div class="text-4xl mb-3">🎯</div>
+                                <h4 class="text-lg font-bold text-gray-900 mb-2">Select Your Items</h4>
+                                <p class="text-sm text-gray-700 mb-4">
+                                    Choose which items you want (or don't want) and star your favorites. You'll have full control over your bundle.
+                                </p>
+                                <div class="inline-block px-4 py-2 bg-blue-500 text-white rounded-full text-sm font-semibold">
+                                    Recommended
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                    
+                    <!-- Random Selection Option -->
+                    <label class="cursor-pointer">
+                        <input type="radio" name="selection_mode" value="random" class="hidden peer">
+                        <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border-2 border-purple-200 peer-checked:border-purple-500 peer-checked:bg-purple-200 transition-all duration-300 h-full">
+                            <div class="text-center">
+                                <div class="text-4xl mb-3">🎲</div>
+                                <h4 class="text-lg font-bold text-gray-900 mb-2">Random Selection</h4>
+                                <p class="text-sm text-gray-700 mb-4">
+                                    Let our smart algorithm pick the best items for you! We'll automatically create an optimal bundle that meets profit requirements.
+                                </p>
+                                <div class="inline-block px-4 py-2 bg-purple-500 text-white rounded-full text-sm font-semibold">
+                                    Quick & Easy
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
             <!-- Submit Button -->
             <div class="text-center">
-                <button type="submit" class="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                <button type="submit" id="submit-btn" class="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
                     Continue to Select Items
                     <svg class="inline-block ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -199,6 +239,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const customRadio = document.getElementById('custom_radio');
     const customQtyInputs = document.getElementById('custom-qty-inputs');
     const allRadios = document.querySelectorAll('input[name="bundle_type"]');
+    const selectionModeRadios = document.querySelectorAll('input[name="selection_mode"]');
+    const submitBtn = document.getElementById('submit-btn');
     
     // Show/hide custom inputs based on selection
     function updateCustomInputs() {
@@ -209,9 +251,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Update submit button text based on selection mode
+    function updateSubmitButton() {
+        const selectedMode = document.querySelector('input[name="selection_mode"]:checked');
+        if (selectedMode && selectedMode.value === 'random') {
+            submitBtn.innerHTML = 'Continue with Random Selection <svg class="inline-block ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>';
+        } else {
+            submitBtn.innerHTML = 'Continue to Select Items <svg class="inline-block ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>';
+        }
+    }
+    
     // Listen to all radio changes
     allRadios.forEach(radio => {
         radio.addEventListener('change', updateCustomInputs);
+    });
+    
+    // Listen to selection mode changes
+    selectionModeRadios.forEach(radio => {
+        radio.addEventListener('change', updateSubmitButton);
     });
     
     // Also update on click of the custom card
@@ -224,6 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initial state
     updateCustomInputs();
+    updateSubmitButton();
 });
 </script>
 {% endblock %}

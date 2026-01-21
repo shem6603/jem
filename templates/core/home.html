@@ -242,7 +242,7 @@
                     <span class="text-3xl">🚚</span>
                 </div>
                 <h3 class="text-xl font-bold text-gray-900 mb-3">Island-Wide Delivery</h3>
-                <p class="text-gray-600">Free pickup in Spanish Town or delivery via Knutsford Express</p>
+                <p class="text-gray-600">Free pickup in St. Catherine or delivery via Knutsford Express</p>
             </div>
             
             <!-- Feature 4 -->
@@ -395,47 +395,108 @@
                 How It Works
             </h2>
             <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-                Getting your snacks is as easy as 1-2-3
+                Choose your preferred way to order - via WhatsApp or our website
             </p>
         </div>
         
-        <div class="grid md:grid-cols-3 gap-8 relative">
-            <!-- Connecting line (hidden on mobile) -->
-            <div class="hidden md:block absolute top-16 left-1/4 right-1/4 h-1 bg-gradient-to-r from-orange-200 via-yellow-200 to-green-200 z-0"></div>
-            
-            <!-- Step 1 -->
-            <div class="relative z-10 text-center">
-                <div class="step-number bg-gradient-to-br from-orange-500 to-red-500 text-white mx-auto mb-6 shadow-lg">
-                    1
+        <div class="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <!-- Order via WhatsApp -->
+            <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-3xl p-8 shadow-xl border-2 border-green-200 hover:border-green-400 transition-all duration-300">
+                <div class="text-center mb-6">
+                    <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                        <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Order via WhatsApp</h3>
+                    <p class="text-gray-600 mb-6">Quick and easy ordering through chat</p>
                 </div>
-                <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                    <div class="text-5xl mb-4">📱</div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-3">Choose Your Bundle</h3>
-                    <p class="text-gray-600">Select from our pre-made bundles or customize your own with your favorite snacks</p>
+                
+                <div class="space-y-4 mb-6">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5">1</div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-1">Send us a message</h4>
+                            <p class="text-sm text-gray-600">Tell us which bundle you want or describe your custom order</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5">2</div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-1">Confirm details</h4>
+                            <p class="text-sm text-gray-600">We'll confirm your order, pricing, and pickup/delivery location</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5">3</div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-1">Make payment</h4>
+                            <p class="text-sm text-gray-600">Send payment proof and we'll prepare your bundle</p>
+                        </div>
+                    </div>
                 </div>
+                
+                <a href="https://wa.me/18762030234?text=Hi!%20I'd%20like%20to%20place%20an%20order%20for%20snacks%20and%20juices." 
+                   target="_blank"
+                   class="block w-full px-6 py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-center transition-all duration-300 transform hover:scale-105 shadow-lg">
+                    💬 Order on WhatsApp
+                </a>
             </div>
             
-            <!-- Step 2 -->
-            <div class="relative z-10 text-center">
-                <div class="step-number bg-gradient-to-br from-yellow-500 to-orange-500 text-white mx-auto mb-6 shadow-lg">
-                    2
+            <!-- Order via Website -->
+            <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-3xl p-8 shadow-xl border-2 border-orange-200 hover:border-orange-400 transition-all duration-300">
+                <div class="text-center mb-6">
+                    <div class="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Order via Website</h3>
+                    <p class="text-gray-600 mb-6">Full control with our online ordering system</p>
                 </div>
-                <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                    <div class="text-5xl mb-4">💬</div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-3">WhatsApp Us</h3>
-                    <p class="text-gray-600">Send your order via WhatsApp and confirm your delivery or pickup details</p>
+                
+                <div class="space-y-4 mb-6">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5">1</div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-1">Choose your bundle</h4>
+                            <p class="text-sm text-gray-600">Select a pre-made bundle or build your own custom mix</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5">2</div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-1">Select your items</h4>
+                            <p class="text-sm text-gray-600">Pick specific snacks/juices or let our algorithm choose for you</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5">3</div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-1">Complete & pay</h4>
+                            <p class="text-sm text-gray-600">Enter your details, upload payment proof, and you're done!</p>
+                        </div>
+                    </div>
                 </div>
+                
+                <a href="{% url 'core:bundle_builder' %}" 
+                   class="block w-full px-6 py-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-xl text-center transition-all duration-300 transform hover:scale-105 shadow-lg">
+                    🛒 Order on Website
+                </a>
             </div>
-            
-            <!-- Step 3 -->
-            <div class="relative z-10 text-center">
-                <div class="step-number bg-gradient-to-br from-green-500 to-teal-500 text-white mx-auto mb-6 shadow-lg">
-                    3
-                </div>
-                <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                    <div class="text-5xl mb-4">🎁</div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-3">Receive & Enjoy</h3>
-                    <p class="text-gray-600">Get your bundle delivered or pick it up, then watch the kids enjoy!</p>
+        </div>
+        
+        <!-- Final Step - Same for Both -->
+        <div class="mt-12 text-center">
+            <div class="inline-block bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-lg border-2 border-blue-200 max-w-2xl">
+                <div class="flex items-center justify-center gap-4 mb-4">
+                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-lg">
+                        <span class="text-3xl">🎁</span>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="text-xl font-bold text-gray-900">Receive & Enjoy!</h4>
+                        <p class="text-gray-600">Pick up your bundle or get it delivered, then watch the kids enjoy!</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -553,7 +614,7 @@
                     <span class="text-3xl">📍</span>
                 </div>
                 <h3 class="text-xl font-bold mb-2">Free Pickup</h3>
-                <p class="text-gray-400">Available in Spanish Town. Contact us for pickup times and location.</p>
+                <p class="text-gray-400">Available in St. Catherine. Contact us for pickup times and location.</p>
             </div>
             <div>
                 <div class="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">

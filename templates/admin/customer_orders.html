@@ -3,23 +3,23 @@
 {% block title %}Customer Orders - J.E.M Admin{% endblock %}
 
 {% block content %}
-<div class="mb-8">
-    <div class="flex justify-between items-center">
+<div class="mb-6 md:mb-8">
+    <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-            <h1 class="text-3xl font-black text-gray-900 mb-2">Customer Orders</h1>
-            <p class="text-gray-600">Manage orders from customers</p>
+            <h1 class="text-2xl md:text-3xl font-black text-gray-900 mb-2">Customer Orders</h1>
+            <p class="text-gray-600 text-sm md:text-base">Manage orders from customers</p>
         </div>
         
         <!-- Alert Badges -->
-        <div class="flex gap-4">
+        <div class="flex flex-wrap gap-2 md:gap-4">
             {% if pending_count > 0 %}
-            <a href="?status=pending_approval" class="px-4 py-2 bg-purple-100 text-purple-800 font-semibold rounded-lg hover:bg-purple-200 transition">
-                ⏳ {{ pending_count }} Pending Approval
+            <a href="?status=pending_approval" class="px-3 py-2 md:px-4 md:py-2 bg-purple-100 text-purple-800 font-semibold rounded-lg hover:bg-purple-200 transition text-sm md:text-base">
+                ⏳ {{ pending_count }} Pending
             </a>
             {% endif %}
             {% if payment_uploaded_count > 0 %}
-            <a href="?status=payment_uploaded" class="px-4 py-2 bg-yellow-100 text-yellow-800 font-semibold rounded-lg hover:bg-yellow-200 transition">
-                💳 {{ payment_uploaded_count }} Payment to Verify
+            <a href="?status=payment_uploaded" class="px-3 py-2 md:px-4 md:py-2 bg-yellow-100 text-yellow-800 font-semibold rounded-lg hover:bg-yellow-200 transition text-sm md:text-base">
+                💳 {{ payment_uploaded_count }} Payment
             </a>
             {% endif %}
         </div>
@@ -42,8 +42,8 @@
     </div>
 </div>
 
-<!-- Orders Table -->
-<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+<!-- Orders Table (Desktop) -->
+<div class="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead class="bg-gray-50">
@@ -127,5 +127,74 @@
             </tbody>
         </table>
     </div>
+</div>
+
+<!-- Orders Cards (Mobile) -->
+<div class="md:hidden space-y-4">
+    {% for order in orders %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div class="flex justify-between items-start mb-3">
+            <div>
+                <span class="font-mono font-bold text-orange-600 text-sm">{{ order.order_reference }}</span>
+                <div class="mt-1">
+                    <div class="font-semibold text-gray-900">{{ order.customer_name }}</div>
+                    <div class="text-xs text-gray-500">{{ order.customer_phone }}</div>
+                </div>
+            </div>
+            <span class="px-2 py-1 text-xs font-semibold rounded-full
+                {% if order.status == 'pending_approval' %}bg-purple-100 text-purple-800
+                {% elif order.status == 'approved' %}bg-blue-100 text-blue-800
+                {% elif order.status == 'payment_uploaded' %}bg-yellow-100 text-yellow-800
+                {% elif order.status == 'payment_verified' %}bg-teal-100 text-teal-800
+                {% elif order.status == 'processing' %}bg-orange-100 text-orange-800
+                {% elif order.status == 'completed' %}bg-green-100 text-green-800
+                {% elif order.status == 'cancelled' %}bg-red-100 text-red-800
+                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                {{ order.get_status_display }}
+            </span>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+                <p class="text-xs text-gray-500 mb-1">Bundle</p>
+                <span class="px-2 py-1 text-xs font-semibold rounded-full 
+                    {% if order.bundle_type == 'custom' %}bg-purple-100 text-purple-800
+                    {% elif order.bundle_type == 'mega_mix' %}bg-orange-100 text-orange-800
+                    {% else %}bg-blue-100 text-blue-800{% endif %}">
+                    {{ order.get_bundle_type_display }}
+                </span>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 mb-1">Date</p>
+                <p class="text-sm font-medium text-gray-900">{{ order.created_at|date:"M d, Y" }}</p>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+                <p class="text-xs text-gray-500 mb-1">Revenue</p>
+                <p class="text-sm font-semibold text-gray-900">
+                    {% if order.total_revenue > 0 %}${{ order.total_revenue|floatformat:0 }}{% else %}<span class="text-gray-400">TBD</span>{% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 mb-1">Profit</p>
+                <p class="text-sm font-semibold {% if order.net_profit > 0 %}text-green-600{% else %}text-gray-400{% endif %}">
+                    {% if order.net_profit > 0 %}${{ order.net_profit|floatformat:0 }} ({{ order.profit_margin|floatformat:0 }}%){% else %}-{% endif %}
+                </p>
+            </div>
+        </div>
+        
+        <a href="{% url 'admin_customer_order_detail' order.id %}" 
+           class="block w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition text-center">
+            View Details
+        </a>
+    </div>
+    {% empty %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+        <div class="text-6xl mb-4">📦</div>
+        <p class="text-gray-500">No orders found</p>
+    </div>
+    {% endfor %}
 </div>
 {% endblock %}

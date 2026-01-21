@@ -170,22 +170,38 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Security settings for production
+# Security settings (apply in both dev and production)
+SECURE_BROWSER_XSS_FILTER = True  # Enable browser XSS filter
+SECURE_CONTENT_TYPE_NOSNIFF = True  # Prevent MIME type sniffing
+X_FRAME_OPTIONS = 'DENY'  # Prevent clickjacking
+X_CONTENT_TYPE_OPTIONS = 'nosniff'  # Additional MIME type protection
+REFERRER_POLICY = 'strict-origin-when-cross-origin'  # Control referrer information
+
+# Additional security settings for production only
 if not DEBUG:
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_SECONDS = 31536000  # 1 year HSTS
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True  # HTTPS only cookies
+    CSRF_COOKIE_SECURE = True  # HTTPS only CSRF cookies
+    SECURE_SSL_REDIRECT = True  # Force HTTPS in production
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # For proxies/load balancers
 
 # Session security
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_SAVE_EVERY_REQUEST = True  # Extend session on activity
+SESSION_COOKIE_AGE = 3600  # 1 hour session timeout
+SESSION_COOKIE_NAME = 'jem_sessionid'  # Custom session cookie name
+
+# CSRF security
+CSRF_COOKIE_HTTPONLY = True  # Prevent JavaScript access to CSRF cookie
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_FAILURE_VIEW = 'core.views.csrf_failure'  # Custom CSRF failure view
+CSRF_TRUSTED_ORIGINS = []  # Add trusted origins for CSRF if needed
+if not DEBUG:
+    CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else []
 
 # Password security
 AUTH_PASSWORD_VALIDATORS = [

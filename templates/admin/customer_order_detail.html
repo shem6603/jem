@@ -32,27 +32,30 @@
     </div>
 </div>
 
-<div class="grid lg:grid-cols-3 gap-6">
+<!-- Top Section: Customer Info & Financial Summary Side by Side -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
     <!-- Customer Info -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-900 mb-4">Customer Information</h2>
-        <div class="space-y-3">
+        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <span class="mr-2">👤</span> Customer Information
+        </h2>
+        <div class="grid grid-cols-2 gap-4">
             <div>
-                <p class="text-xs text-gray-500 uppercase">Name</p>
+                <p class="text-xs text-gray-500 uppercase mb-1">Name</p>
                 <p class="font-semibold text-gray-900">{{ order.customer_name }}</p>
             </div>
             <div>
-                <p class="text-xs text-gray-500 uppercase">Phone</p>
+                <p class="text-xs text-gray-500 uppercase mb-1">Phone</p>
                 <p class="font-semibold text-gray-900">{{ order.customer_phone }}</p>
             </div>
             {% if order.customer_whatsapp and order.customer_whatsapp != order.customer_phone %}
             <div>
-                <p class="text-xs text-gray-500 uppercase">WhatsApp</p>
+                <p class="text-xs text-gray-500 uppercase mb-1">WhatsApp</p>
                 <p class="font-semibold text-gray-900">{{ order.customer_whatsapp }}</p>
             </div>
             {% endif %}
-            <div>
-                <p class="text-xs text-gray-500 uppercase">Pickup Location</p>
+            <div class="col-span-2">
+                <p class="text-xs text-gray-500 uppercase mb-1">Pickup Location</p>
                 <p class="font-semibold text-gray-900">{{ order.pickup_spot }}</p>
             </div>
         </div>
@@ -60,8 +63,8 @@
         <div class="mt-4 pt-4 border-t border-gray-200">
             <a href="https://wa.me/1{{ order.customer_phone|cut:'-'|cut:' '|cut:'('|cut:')' }}?text=Hi%20{{ order.customer_name }}!%20This%20is%20J.E.M%20regarding%20your%20order%20{{ order.order_reference }}." 
                target="_blank"
-               class="inline-flex items-center text-green-600 hover:text-green-700 font-semibold">
-                <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 24 24">
+               class="inline-flex items-center px-4 py-2 bg-green-50 text-green-700 font-semibold rounded-lg hover:bg-green-100 transition">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                 </svg>
                 WhatsApp Customer
@@ -69,222 +72,342 @@
         </div>
     </div>
     
-    <!-- Order Items -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-900 mb-4">Order Items</h2>
-        <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="update_items">
-            
-            <div class="space-y-3 max-h-80 overflow-y-auto">
-                {% for item in order_items %}
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+    <!-- Financial Summary -->
+    <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-blue-200 p-6">
+        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <span class="mr-2">💰</span> Financial Summary
+        </h2>
+        <div class="grid grid-cols-2 gap-4">
+            <div class="bg-white rounded-lg p-3">
+                <p class="text-xs text-gray-500 uppercase mb-1">Revenue</p>
+                <p class="text-xl font-bold text-gray-900">
+                    {% if order.total_revenue > 0 %}${{ order.total_revenue|floatformat:0 }}{% else %}TBD{% endif %}
+                </p>
+            </div>
+            <div class="bg-white rounded-lg p-3">
+                <p class="text-xs text-gray-500 uppercase mb-1">Cost</p>
+                <p class="text-xl font-bold text-gray-900" id="financial-cost">${{ order.total_cost|floatformat:2 }}</p>
+            </div>
+            <div class="bg-white rounded-lg p-3">
+                <p class="text-xs text-gray-500 uppercase mb-1">Profit</p>
+                <p class="text-xl font-bold {% if order.net_profit > 0 %}text-green-600{% else %}text-gray-400{% endif %}" id="financial-profit">
+                    {% if order.net_profit %}${{ order.net_profit|floatformat:2 }}{% else %}-{% endif %}
+                </p>
+            </div>
+            <div class="bg-white rounded-lg p-3">
+                <p class="text-xs text-gray-500 uppercase mb-1">Margin</p>
+                <p class="text-xl font-bold {% if order.profit_margin >= 38 %}text-green-600{% else %}text-orange-600{% endif %}" id="financial-margin">
+                    {% if order.profit_margin > 0 %}{{ order.profit_margin|floatformat:1 }}%{% else %}-{% endif %}
+                </p>
+            </div>
+        </div>
+        {% if suggested_price %}
+        <div class="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-300">
+            <p class="text-blue-900 text-sm font-semibold">
+                💡 Suggested: ${{ suggested_price }} JMD ({{ target_margin }}% margin)
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Middle Section: Order Items (Full Width) -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-gray-900 flex items-center">
+            <span class="mr-2">📦</span> Order Items
+        </h2>
+        <div class="flex items-center gap-4">
+            {% if bundle_requirements %}
+            <!-- Bundle Requirements Display -->
+            <div class="flex items-center gap-4 text-sm">
+                {% if bundle_requirements.snacks > 0 %}
+                <div class="text-right">
+                    <p class="text-xs text-gray-500">Required Snacks</p>
+                    <p class="font-bold text-gray-900">
+                        <span id="current-snacks" class="text-orange-600">0</span>
+                        <span class="text-gray-400">/</span>
+                        <span id="required-snacks">{{ bundle_requirements.snacks }}</span>
+                    </p>
+                </div>
+                {% endif %}
+                {% if bundle_requirements.juices > 0 %}
+                <div class="text-right">
+                    <p class="text-xs text-gray-500">Required Juices</p>
+                    <p class="font-bold text-gray-900">
+                        <span id="current-juices" class="text-orange-600">0</span>
+                        <span class="text-gray-400">/</span>
+                        <span id="required-juices">{{ bundle_requirements.juices }}</span>
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            <div class="text-right">
+                <p class="text-xs text-gray-500">Total Cost</p>
+                <p class="text-lg font-bold text-gray-900" id="header-total-cost">${{ order.total_cost|floatformat:2 }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <form method="post" id="update-items-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_items">
+        
+        <!-- Category Tabs -->
+        <div class="flex gap-2 mb-4 border-b border-gray-200 overflow-x-auto">
+            <button type="button" class="category-tab px-4 md:px-6 py-3 min-h-[44px] font-semibold text-sm border-b-2 border-orange-500 text-orange-600 transition cursor-pointer whitespace-nowrap" data-category="snack">
+                🍟 Snacks
+                <span id="snack-count-badge" class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold"></span>
+            </button>
+            <button type="button" class="category-tab px-4 md:px-6 py-3 min-h-[44px] font-semibold text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition cursor-pointer whitespace-nowrap" data-category="juice">
+                🧃 Juices
+                <span id="juice-count-badge" class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold"></span>
+            </button>
+            <button type="button" class="category-tab px-4 md:px-6 py-3 min-h-[44px] font-semibold text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition ml-auto cursor-pointer whitespace-nowrap" data-category="all">
+                📦 All Items
+            </button>
+        </div>
+        
+        <!-- Items Table (Desktop) -->
+        <div class="hidden md:block overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-gray-200">
+                        <th class="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Item</th>
+                        <th class="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Category</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Unit Cost</th>
+                        <th class="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Quantity</th>
+                        <th class="text-right py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order_items %}
+                    <tr class="item-row border-b border-gray-100 hover:bg-gray-50 transition" data-category="{{ item.item.category }}">
+                        <td class="py-3 px-4">
+                            <div class="flex items-center">
+                                {% if item.item.category == 'snack' %}
+                                <span class="text-xl mr-3">🍟</span>
+                                {% else %}
+                                <span class="text-xl mr-3">🧃</span>
+                                {% endif %}
+                                <div>
+                                    <p class="font-semibold text-gray-900">
+                                        {{ item.item.name }}
+                                        {% if item.is_starred %}<span class="text-yellow-500 ml-1">⭐</span>{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full {% if item.item.category == 'snack' %}bg-orange-100 text-orange-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                                {{ item.item.category|title }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right font-medium text-gray-700" data-cost="{{ item.item.cost_price }}">
+                            ${{ item.item.cost_price|floatformat:2 }}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="0" max="100"
+                                   class="quantity-input w-20 px-2 py-2 min-h-[44px] border border-gray-300 rounded text-center text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                   data-item-id="{{ item.id }}"
+                                   data-category="{{ item.item.category }}">
+                        </td>
+                        <td class="py-3 px-4 text-right font-semibold text-gray-900 item-subtotal" data-item-id="{{ item.id }}">
+                            ${{ item.subtotal_cost|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Validation Message -->
+        {% if bundle_requirements %}
+        <div id="validation-message" class="mt-4 p-3 rounded-lg hidden"></div>
+        {% endif %}
+        
+        <!-- Mobile Card View -->
+        <div class="md:hidden space-y-4 mt-4">
+            {% for item in order_items %}
+            <div class="item-row-card bg-gray-50 rounded-lg p-4 border border-gray-200" data-category="{{ item.item.category }}">
+                <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center flex-1">
                         {% if item.item.category == 'snack' %}
-                        <span class="text-xl mr-2">🍟</span>
+                        <span class="text-2xl mr-3">🍟</span>
                         {% else %}
-                        <span class="text-xl mr-2">🧃</span>
+                        <span class="text-2xl mr-3">🧃</span>
                         {% endif %}
-                        <div>
+                        <div class="flex-1">
                             <p class="font-semibold text-gray-900">
                                 {{ item.item.name }}
                                 {% if item.is_starred %}<span class="text-yellow-500 ml-1">⭐</span>{% endif %}
                             </p>
-                            <p class="text-xs text-gray-500">Cost: ${{ item.subtotal_cost|floatformat:2 }}</p>
+                            <p class="text-xs text-gray-500 mt-1">${{ item.item.cost_price|floatformat:2 }} per unit</p>
                         </div>
                     </div>
-                    <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="1" max="100"
-                           class="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm">
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full {% if item.item.category == 'snack' %}bg-orange-100 text-orange-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                        {{ item.item.category|title }}
+                    </span>
                 </div>
-                {% endfor %}
-            </div>
-            
-            <div class="mt-4 pt-4 border-t border-gray-200">
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-gray-600">Total Cost:</span>
-                    <span class="font-bold text-gray-900">${{ order.total_cost|floatformat:2 }}</span>
-                </div>
-                <button type="submit" class="w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition text-sm mb-3">
-                    Update Quantities
-                </button>
-                
-                <!-- Run Algorithm Button -->
-                <form method="post" class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="rerun_algo">
-                    <div class="flex items-center gap-2 mb-2">
-                        <label class="text-xs font-semibold text-blue-800 flex-shrink-0">Target Margin:</label>
-                        <input type="number" name="target_margin" min="38" step="0.1" value="{{ target_margin|floatformat:1 }}"
-                               class="flex-1 px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <span class="text-xs text-blue-600 flex-shrink-0">%</span>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Quantity</label>
+                        <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="0" max="100"
+                               class="quantity-input w-24 px-3 py-3 min-h-[44px] border border-gray-300 rounded-lg text-center text-sm font-semibold focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                               data-item-id="{{ item.id }}"
+                               data-category="{{ item.item.category }}">
                     </div>
-                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm">
-                        🔄 Redistribute Units (Run Algorithm)
-                    </button>
-                    <p class="text-xs text-blue-600 mt-1 text-center">Optimizes quantities to achieve target margin</p>
-                </form>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 mb-1">Subtotal</p>
+                        <p class="font-bold text-gray-900 item-subtotal text-lg" data-item-id="{{ item.id }}">
+                            ${{ item.subtotal_cost|floatformat:2 }}
+                        </p>
+                    </div>
+                </div>
             </div>
-        </form>
-    </div>
-    
-    <!-- Actions & Financial -->
-    <div class="space-y-6">
-        <!-- Financial Summary -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-bold text-gray-900 mb-4">Financial Summary</h2>
-            <div class="space-y-3">
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Revenue:</span>
-                    <span class="font-bold text-gray-900">
-                        {% if order.total_revenue > 0 %}${{ order.total_revenue|floatformat:0 }}{% else %}TBD{% endif %}
-                    </span>
-                </div>
-                {% if suggested_price %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Suggested Revenue:</span>
-                    <span class="font-semibold text-blue-700">${{ suggested_price }} JMD</span>
-                </div>
-                {% endif %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Cost:</span>
-                    <span class="font-semibold text-gray-900">${{ order.total_cost|floatformat:2 }}</span>
-                </div>
-                <div class="flex justify-between pt-2 border-t border-gray-200">
-                    <span class="text-gray-600">Profit:</span>
-                    <span class="font-bold {% if order.net_profit > 0 %}text-green-600{% else %}text-gray-400{% endif %}">
-                        {% if order.net_profit %}${{ order.net_profit|floatformat:2 }}{% else %}-{% endif %}
-                    </span>
-                </div>
-                {% if order.profit_margin > 0 %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Margin:</span>
-                    <span class="font-semibold {% if order.profit_margin >= 38 %}text-green-600{% else %}text-orange-600{% endif %}">
-                        {{ order.profit_margin|floatformat:1 }}%
-                    </span>
-                </div>
-                {% endif %}
-                {% if suggested_margin %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Suggested Margin:</span>
-                    <span class="font-semibold {% if suggested_margin >= 38 %}text-green-600{% else %}text-orange-600{% endif %}">
-                        {{ suggested_margin|floatformat:1 }}%
-                    </span>
-                </div>
-                {% endif %}
-            </div>
-            
-            {% if suggested_price %}
-            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p class="text-blue-800 text-sm">
-                    <strong>Suggested price for {{ target_margin }}% margin:</strong> ${{ suggested_price }} JMD
-                </p>
-            </div>
-            {% endif %}
+            {% endfor %}
         </div>
         
-        <!-- Payment Proof -->
-        {% if order.payment_proof %}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-bold text-gray-900 mb-4">Payment Proof</h2>
-            <div class="space-y-3">
-                {% if order.payment_method %}
-                <p class="text-sm text-gray-600">Method: <span class="font-semibold">{{ order.payment_method }}</span></p>
-                {% endif %}
-                <a href="{{ order.payment_proof.url }}" target="_blank" class="block">
-                    <img src="{{ order.payment_proof.url }}" alt="Payment Proof" class="w-full rounded-lg border border-gray-200 hover:opacity-90 transition">
-                </a>
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- Actions -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-bold text-gray-900 mb-4">Actions</h2>
+        <div class="mt-6 space-y-4">
+            <!-- Update Quantities Button -->
+            <button type="submit" id="update-btn" class="w-full px-6 py-3 min-h-[44px] bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition text-sm">
+                💾 Update Quantities
+            </button>
             
-            {% if order.bundle_type == 'custom' %}
-            <form method="post" class="mb-4 p-4 bg-gray-50 rounded-lg">
+            <!-- Run Algorithm Section -->
+            <form method="post" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="rerun_algo">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Re-run Algorithm (Min 38% Margin)</label>
-                <div class="flex items-center gap-3">
-                    <input type="number" name="target_margin" min="38" step="0.1" value="{{ target_margin|floatformat:1 }}"
-                           class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition">
-                        Run Algorithm
-                    </button>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
+                    <label class="text-sm font-semibold text-blue-800 flex-shrink-0">Target Margin:</label>
+                    <div class="flex items-center gap-2 flex-1">
+                        <input type="number" name="target_margin" min="38" step="0.1" value="{{ target_margin|floatformat:1 }}"
+                               class="w-20 px-3 py-3 min-h-[44px] border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <span class="text-sm text-blue-600 flex-shrink-0">%</span>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">Redistributes items based on the margin you enter.</p>
+                <button type="submit" class="w-full px-6 py-3 min-h-[44px] bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm">
+                    🔄 Redistribute Units
+                </button>
+                <p class="text-xs text-blue-600 mt-2 text-center">Optimizes quantities to achieve target margin</p>
             </form>
+        </div>
+    </form>
+</div>
+
+<!-- Bottom Section: Actions & Payment Proof -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+    <!-- Actions -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <span class="mr-2">⚙️</span> Actions
+        </h2>
+        
+        {% if order.status == 'pending_approval' %}
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="approve">
+            
+            {% if order.bundle_type == 'custom' %}
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Set Price (JMD) <span class="text-red-500">*</span></label>
+                <input type="number" name="new_price" value="{{ suggested_price }}" required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+            </div>
             {% endif %}
             
-            {% if order.status == 'pending_approval' %}
-            <form method="post" class="space-y-4">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="approve">
-                
-                {% if order.bundle_type == 'custom' %}
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Set Price (JMD) <span class="text-red-500">*</span></label>
-                    <input type="number" name="new_price" value="{{ suggested_price }}" required
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                </div>
-                {% endif %}
-                
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Notes to Customer</label>
-                    <textarea name="admin_notes" rows="2" 
-                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                              placeholder="Optional message for the customer...">{{ order.admin_notes }}</textarea>
-                </div>
-                
-                <button type="submit" class="w-full px-4 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition">
-                    ✓ Approve Order
-                </button>
-            </form>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Notes to Customer</label>
+                <textarea name="admin_notes" rows="2" 
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                          placeholder="Optional message for the customer...">{{ order.admin_notes }}</textarea>
+            </div>
             
-            {% elif order.status == 'payment_uploaded' %}
-            <form method="post" class="space-y-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="verify_payment">
-                <button type="submit" class="w-full px-4 py-3 bg-teal-500 text-white font-bold rounded-lg hover:bg-teal-600 transition">
-                    ✓ Verify Payment
-                </button>
-            </form>
-            
-            {% elif order.status == 'payment_verified' %}
-            <form method="post" class="space-y-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="mark_processing">
-                <button type="submit" class="w-full px-4 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition">
-                    📦 Mark as Processing
-                </button>
-            </form>
-            
-            {% elif order.status == 'processing' %}
-            <form method="post" class="space-y-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="mark_completed">
-                <button type="submit" class="w-full px-4 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition">
-                    🎉 Mark as Completed
-                </button>
-            </form>
-            {% endif %}
-            
-            {% if order.status not in 'completed,cancelled' %}
-            <form method="post" class="mt-4 pt-4 border-t border-gray-200">
+            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-base">
+                ✓ Approve Order
+            </button>
+        </form>
+        
+        {% elif order.status == 'payment_uploaded' %}
+        <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify_payment">
+            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-teal-500 text-white font-bold rounded-lg hover:bg-teal-600 transition text-base">
+                ✓ Verify Payment
+            </button>
+        </form>
+        
+        {% elif order.status == 'payment_verified' %}
+        <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="mark_processing">
+            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition text-base">
+                📦 Mark as Processing
+            </button>
+        </form>
+        
+        {% elif order.status == 'processing' %}
+        <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="mark_completed">
+            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-base">
+                🎉 Mark as Completed
+            </button>
+        </form>
+        {% endif %}
+        
+        {% if order.status not in 'completed,cancelled' %}
+        <div class="mt-6 pt-4 border-t border-gray-200">
+            <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="cancel">
-                <textarea name="admin_notes" rows="2" 
-                          class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2"
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Cancel Order</label>
+                <textarea name="admin_notes" rows="3" 
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg mb-2 text-base"
                           placeholder="Reason for cancellation..."></textarea>
-                <button type="submit" class="w-full px-4 py-2 bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 transition"
+                <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 transition text-base"
                         onclick="return confirm('Are you sure you want to cancel this order?')">
                     Cancel Order
                 </button>
             </form>
-            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Delete Order (Danger Zone) -->
+        <div class="mt-6 pt-4 border-t-2 border-red-200">
+            <p class="text-xs text-red-600 font-semibold uppercase mb-2">Danger Zone</p>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition text-base"
+                        onclick="return confirm('⚠️ WARNING: This will PERMANENTLY DELETE this order and all its items. This action cannot be undone!\n\nAre you absolutely sure you want to delete order {{ order.order_reference }}?')">
+                    🗑️ Delete Order Permanently
+                </button>
+            </form>
+            <p class="text-xs text-red-500 mt-2 text-center">This action cannot be undone!</p>
         </div>
     </div>
+    
+    <!-- Payment Proof -->
+    {% if order.payment_proof %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <span class="mr-2">💳</span> Payment Proof
+        </h2>
+        <div class="space-y-3">
+            {% if order.payment_method %}
+            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span class="text-sm text-gray-600">Payment Method:</span>
+                <span class="font-semibold text-gray-900">{{ order.payment_method }}</span>
+            </div>
+            {% endif %}
+            <a href="{{ order.payment_proof.url }}" target="_blank" class="block">
+                <img src="{{ order.payment_proof.url }}" alt="Payment Proof" class="w-full rounded-lg border border-gray-200 hover:opacity-90 transition shadow-sm">
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 {% if order.admin_notes %}
@@ -293,4 +416,262 @@
     <p class="text-blue-700">{{ order.admin_notes }}</p>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const quantityInputs = document.querySelectorAll('.quantity-input');
+    const updateBtn = document.getElementById('update-btn');
+    const validationMsg = document.getElementById('validation-message');
+    const currentSnacksEl = document.getElementById('current-snacks');
+    const currentJuicesEl = document.getElementById('current-juices');
+    
+    // Financial display elements
+    const financialCostEl = document.getElementById('financial-cost');
+    const financialProfitEl = document.getElementById('financial-profit');
+    const financialMarginEl = document.getElementById('financial-margin');
+    const headerTotalCostEl = document.getElementById('header-total-cost');
+    
+    // Category tab elements
+    const categoryTabs = document.querySelectorAll('.category-tab');
+    const itemRows = document.querySelectorAll('.item-row');
+    const itemRowCards = document.querySelectorAll('.item-row-card'); // Mobile card view
+    const snackCountBadge = document.getElementById('snack-count-badge');
+    const juiceCountBadge = document.getElementById('juice-count-badge');
+    
+    // Get revenue from the page (from order.total_revenue)
+    const revenue = parseFloat('{{ order.total_revenue|default:0 }}') || 0;
+    
+    {% if bundle_requirements %}
+    const requiredSnacks = {{ bundle_requirements.snacks|default:0 }};
+    const requiredJuices = {{ bundle_requirements.juices|default:0 }};
+    {% else %}
+    const requiredSnacks = 0;
+    const requiredJuices = 0;
+    {% endif %}
+    
+    // Category tab switching
+    function switchCategory(category) {
+        // Update tab styles
+        categoryTabs.forEach(tab => {
+            const tabCategory = tab.dataset.category;
+            if (tabCategory === category) {
+                tab.classList.remove('border-transparent', 'text-gray-500', 'text-gray-700');
+                if (category === 'snack') {
+                    tab.classList.add('border-orange-500', 'text-orange-600');
+                } else if (category === 'juice') {
+                    tab.classList.add('border-blue-500', 'text-blue-600');
+                } else {
+                    tab.classList.add('border-gray-500', 'text-gray-700');
+                }
+            } else {
+                tab.classList.remove('border-orange-500', 'text-orange-600', 'border-blue-500', 'text-blue-600', 'border-gray-500', 'text-gray-700');
+                tab.classList.add('border-transparent', 'text-gray-500');
+            }
+        });
+        
+        // Show/hide table rows (desktop)
+        itemRows.forEach(row => {
+            const rowCategory = row.dataset.category;
+            if (category === 'all') {
+                row.style.display = '';
+            } else if (rowCategory === category) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Show/hide card rows (mobile)
+        itemRowCards.forEach(card => {
+            const cardCategory = card.dataset.category;
+            if (category === 'all') {
+                card.style.display = '';
+            } else if (cardCategory === category) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+    
+    // Add event listeners to category tabs
+    categoryTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            switchCategory(this.dataset.category);
+        });
+    });
+    
+    // Count items by category and update badges
+    function updateCategoryBadges() {
+        let snackCount = 0;
+        let juiceCount = 0;
+        
+        // Count table rows (desktop)
+        itemRows.forEach(row => {
+            const category = row.dataset.category;
+            if (category === 'snack') snackCount++;
+            if (category === 'juice') juiceCount++;
+        });
+        
+        // Count card rows (mobile) - only if table rows don't exist
+        if (itemRows.length === 0 && itemRowCards.length > 0) {
+            itemRowCards.forEach(card => {
+                const category = card.dataset.category;
+                if (category === 'snack') snackCount++;
+                if (category === 'juice') juiceCount++;
+            });
+        }
+        
+        if (snackCountBadge) {
+            snackCountBadge.textContent = snackCount;
+        }
+        if (juiceCountBadge) {
+            juiceCountBadge.textContent = juiceCount;
+        }
+    }
+    
+    // Initialize category badges
+    updateCategoryBadges();
+    
+    // Set initial tab to "Snacks" if there are snacks, otherwise "All"
+    const snackRows = document.querySelectorAll('.item-row[data-category="snack"], .item-row-card[data-category="snack"]');
+    if (snackRows.length > 0) {
+        switchCategory('snack');
+    } else {
+        switchCategory('all');
+    }
+    
+    function calculateTotals() {
+        let totalSnacks = 0;
+        let totalJuices = 0;
+        let totalCost = 0;
+        
+        quantityInputs.forEach(input => {
+            const qty = parseInt(input.value) || 0;
+            const category = input.dataset.category;
+            const row = input.closest('tr');
+            const costCell = row.querySelector('[data-cost]');
+            const cost = parseFloat(costCell.dataset.cost) || 0;
+            const subtotal = qty * cost;
+            
+            // Update subtotal display
+            const subtotalCell = row.querySelector('.item-subtotal');
+            if (subtotalCell) {
+                subtotalCell.textContent = '$' + subtotal.toFixed(2);
+            }
+            
+            if (category === 'snack') {
+                totalSnacks += qty;
+            } else if (category === 'juice') {
+                totalJuices += qty;
+            }
+            totalCost += subtotal;
+        });
+        
+        // Update financial displays
+        if (financialCostEl) {
+            financialCostEl.textContent = '$' + totalCost.toFixed(2);
+        }
+        if (headerTotalCostEl) {
+            headerTotalCostEl.textContent = '$' + totalCost.toFixed(2);
+        }
+        
+        // Calculate profit and margin
+        let profit = revenue - totalCost;
+        let margin = revenue > 0 ? (profit / revenue * 100) : 0;
+        
+        // Update profit display
+        if (financialProfitEl) {
+            if (revenue > 0) {
+                financialProfitEl.textContent = '$' + profit.toFixed(2);
+                financialProfitEl.className = profit > 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-gray-400';
+            } else {
+                financialProfitEl.textContent = '-';
+                financialProfitEl.className = 'text-xl font-bold text-gray-400';
+            }
+        }
+        
+        // Update margin display
+        if (financialMarginEl) {
+            if (revenue > 0 && margin > 0) {
+                financialMarginEl.textContent = margin.toFixed(1) + '%';
+                financialMarginEl.className = margin >= 38 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-orange-600';
+            } else {
+                financialMarginEl.textContent = '-';
+                financialMarginEl.className = 'text-xl font-bold text-orange-600';
+            }
+        }
+        
+        // Update current totals display (for bundle requirements)
+        if (currentSnacksEl) {
+            currentSnacksEl.textContent = totalSnacks;
+            currentSnacksEl.className = totalSnacks === requiredSnacks ? 'text-green-600' : 'text-orange-600';
+        }
+        if (currentJuicesEl) {
+            currentJuicesEl.textContent = totalJuices;
+            currentJuicesEl.className = totalJuices === requiredJuices ? 'text-green-600' : 'text-orange-600';
+        }
+        
+        // Validate totals (only if bundle requirements exist)
+        let isValid = true;
+        let errors = [];
+        
+        if (requiredSnacks > 0 && totalSnacks !== requiredSnacks) {
+            isValid = false;
+            errors.push(`Snacks: ${totalSnacks} / ${requiredSnacks} required`);
+        }
+        if (requiredJuices > 0 && totalJuices !== requiredJuices) {
+            isValid = false;
+            errors.push(`Juices: ${totalJuices} / ${requiredJuices} required`);
+        }
+        
+        // Show validation message (only if bundle requirements exist)
+        if (validationMsg && (requiredSnacks > 0 || requiredJuices > 0)) {
+            if (!isValid) {
+                validationMsg.className = 'mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800';
+                validationMsg.innerHTML = '<strong>⚠️ Invalid Totals:</strong> ' + errors.join(', ');
+                validationMsg.classList.remove('hidden');
+            } else {
+                validationMsg.className = 'mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800';
+                validationMsg.innerHTML = '<strong>✓ Totals Match Requirements</strong>';
+                validationMsg.classList.remove('hidden');
+            }
+        }
+        
+        // Enable/disable submit button (only if bundle requirements exist)
+        if (updateBtn && (requiredSnacks > 0 || requiredJuices > 0)) {
+            if (!isValid) {
+                updateBtn.disabled = true;
+                updateBtn.className = 'w-full px-6 py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm';
+            } else {
+                updateBtn.disabled = false;
+                updateBtn.className = 'w-full px-6 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition text-sm';
+            }
+        }
+        
+        return isValid;
+    }
+    
+    // Add event listeners to all quantity inputs
+    quantityInputs.forEach(input => {
+        input.addEventListener('input', calculateTotals);
+        input.addEventListener('change', calculateTotals);
+    });
+    
+    // Initial calculation
+    calculateTotals();
+    
+    // Prevent form submission if invalid (only if bundle requirements exist)
+    const form = document.getElementById('update-items-form');
+    if (form && (requiredSnacks > 0 || requiredJuices > 0)) {
+        form.addEventListener('submit', function(e) {
+            if (!calculateTotals()) {
+                e.preventDefault();
+                alert('Please ensure totals match bundle requirements before updating.');
+                return false;
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -83,12 +83,27 @@ def admin_login(request):
         return render(request, 'admin/login.html', {'lockout': True, 'remaining': remaining})
     
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '')
+        from .security import sanitize_string, rate_limit_check
+        
+        # Rate limiting for login attempts
+        is_allowed, remaining = rate_limit_check(request, 'login', max_requests=5, window_seconds=300)
+        if not is_allowed:
+            messages.error(request, f'Too many login attempts. Please try again later.')
+            return render(request, 'admin/login.html')
+        
+        username = sanitize_string(request.POST.get('username', ''), max_length=150)
+        password = request.POST.get('password', '')  # Don't sanitize password
         remember_me = request.POST.get('remember_me') == 'on'
         
+        # Additional validation
         if not username or not password:
             messages.error(request, 'Please provide both username and password.')
+            record_failed_attempt(request)
+            return render(request, 'admin/login.html')
+        
+        # Prevent SQL injection attempts in username (Django ORM protects, but extra validation)
+        if any(char in username for char in [';', '--', '/*', '*/', 'xp_', 'sp_']):
+            messages.error(request, 'Invalid characters in username.')
             record_failed_attempt(request)
             return render(request, 'admin/login.html')
         
@@ -141,14 +156,25 @@ def admin_logout(request):
 @user_passes_test(is_staff_user, login_url='admin_login')
 def admin_dashboard(request):
     """Admin dashboard with profit and revenue stats"""
-    from .models import Order, Item
+    from .models import Order, CustomerOrder, Item
     from django.db.models import Sum
     
-    # Calculate totals from completed orders
-    completed_orders = Order.objects.filter(status='completed')
-    total_revenue = completed_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
-    total_cost = completed_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
-    total_profit = completed_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    # Calculate totals from completed admin orders (Order model)
+    completed_admin_orders = Order.objects.filter(status='completed')
+    admin_revenue = completed_admin_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    admin_cost = completed_admin_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
+    admin_profit = completed_admin_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    
+    # Calculate totals from completed customer orders (CustomerOrder model)
+    completed_customer_orders = CustomerOrder.objects.filter(status='completed')
+    customer_revenue = completed_customer_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    customer_cost = completed_customer_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
+    customer_profit = completed_customer_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    
+    # Combine totals from both order types
+    total_revenue = admin_revenue + customer_revenue
+    total_cost = admin_cost + customer_cost
+    total_profit = admin_profit + customer_profit
     
     # Low stock products
     low_stock_items = Item.objects.filter(current_stock__lt=5).order_by('current_stock', 'name')
@@ -167,19 +193,33 @@ def admin_dashboard(request):
 @user_passes_test(is_staff_user, login_url='admin_login')
 def admin_order_records(request):
     """Order records page"""
-    from .models import Order
+    from .models import Order, CustomerOrder
     from django.db.models import Sum
     
-    # Get all orders
-    orders = Order.objects.select_related('customer', 'bundle_type').order_by('-created_at')
+    # Get all admin orders (Order model)
+    admin_orders = Order.objects.select_related('customer', 'bundle_type').order_by('-created_at')
     
-    # Calculate totals
-    total_revenue = orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
-    total_cost = orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
-    total_profit = orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    # Calculate totals from admin orders
+    admin_revenue = admin_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    admin_cost = admin_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
+    admin_profit = admin_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    
+    # Get all customer orders (CustomerOrder model)
+    customer_orders = CustomerOrder.objects.all().order_by('-created_at')
+    
+    # Calculate totals from customer orders
+    customer_revenue = customer_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    customer_cost = customer_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
+    customer_profit = customer_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
+    
+    # Combine totals from both order types
+    total_revenue = admin_revenue + customer_revenue
+    total_cost = admin_cost + customer_cost
+    total_profit = admin_profit + customer_profit
     
     context = {
-        'orders': orders,
+        'orders': admin_orders,
+        'customer_orders': customer_orders,
         'total_revenue': total_revenue,
         'total_cost': total_cost,
         'total_profit': total_profit,
@@ -795,42 +835,49 @@ def admin_edit_order(request, order_id):
                             total_snacks = 0
                             total_juices = 0
                             
+                            # Validate quantities using security utilities
+                            from .security import validate_integer
+                            
                             for snack in snacks:
                                 quantity_str = request.POST.get(f'snack_{snack.id}', '').strip()
                                 if quantity_str:
-                                    try:
-                                        quantity = int(quantity_str)
-                                        if quantity > 0:
-                                            # Check stock availability (add back old quantity first)
-                                            old_quantity = existing_order_items.get(snack.id, 0)
-                                            available_stock = snack.current_stock + old_quantity
-                                            if quantity > available_stock:
-                                                messages.error(request, f'Cannot order {quantity} units of {snack.name}. Only {available_stock} units available.')
-                                                has_errors = True
-                                                break
-                                            selected_snacks.append((snack, quantity))
-                                            total_snacks += quantity
-                                    except ValueError:
-                                        pass
+                                    qty_valid, qty_value, qty_error = validate_integer(
+                                        quantity_str,
+                                        min_value=0,
+                                        max_value=10000,
+                                        allow_zero=True
+                                    )
+                                    if qty_valid and qty_value > 0:
+                                        # Check stock availability (add back old quantity first)
+                                        old_quantity = existing_order_items.get(snack.id, 0)
+                                        available_stock = snack.current_stock + old_quantity
+                                        if qty_value > available_stock:
+                                            messages.error(request, f'Cannot order {qty_value} units of {snack.name}. Only {available_stock} units available.')
+                                            has_errors = True
+                                            break
+                                        selected_snacks.append((snack, qty_value))
+                                        total_snacks += qty_value
                             
                             for juice in juices:
                                 if has_errors:
                                     break
                                 quantity_str = request.POST.get(f'juice_{juice.id}', '').strip()
                                 if quantity_str:
-                                    try:
-                                        quantity = int(quantity_str)
-                                        if quantity > 0:
-                                            old_quantity = existing_order_items.get(juice.id, 0)
-                                            available_stock = juice.current_stock + old_quantity
-                                            if quantity > available_stock:
-                                                messages.error(request, f'Cannot order {quantity} units of {juice.name}. Only {available_stock} units available.')
-                                                has_errors = True
-                                                break
-                                            selected_juices.append((juice, quantity))
-                                            total_juices += quantity
-                                    except ValueError:
-                                        pass
+                                    qty_valid, qty_value, qty_error = validate_integer(
+                                        quantity_str,
+                                        min_value=0,
+                                        max_value=10000,
+                                        allow_zero=True
+                                    )
+                                    if qty_valid and qty_value > 0:
+                                        old_quantity = existing_order_items.get(juice.id, 0)
+                                        available_stock = juice.current_stock + old_quantity
+                                        if qty_value > available_stock:
+                                            messages.error(request, f'Cannot order {qty_value} units of {juice.name}. Only {available_stock} units available.')
+                                            has_errors = True
+                                            break
+                                        selected_juices.append((juice, qty_value))
+                                        total_juices += qty_value
                             
                             # Validate quantities for predefined types
                             if not has_errors:
@@ -959,8 +1006,10 @@ def admin_add_item(request):
     from decimal import Decimal
     
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        category = request.POST.get('category', '').strip()
+        from .security import sanitize_string, validate_decimal, validate_integer, validate_file_upload, ALLOWED_IMAGE_EXTENSIONS, MAX_IMAGE_SIZE
+        
+        name = sanitize_string(request.POST.get('name', ''), max_length=200)
+        category = sanitize_string(request.POST.get('category', ''), max_length=10)
         cost_per_bag = request.POST.get('cost_per_bag', '').strip()
         units_per_bag = request.POST.get('units_per_bag', '').strip()
         current_stock = request.POST.get('current_stock', '0').strip()
@@ -973,45 +1022,68 @@ def admin_add_item(request):
             errors.append('Item name is required.')
         if not category or category not in ['snack', 'juice']:
             errors.append('Please select a valid category.')
-        if not cost_per_bag:
-            errors.append('Cost per bag/case is required.')
-        if not units_per_bag:
-            errors.append('Units per bag/case is required.')
+        
+        # Validate cost_per_bag
+        cost_valid, cost_decimal, cost_error = validate_decimal(
+            cost_per_bag,
+            min_value=Decimal('0.01'),
+            allow_zero=False
+        )
+        if not cost_valid:
+            errors.append(f'Cost per bag: {cost_error}')
+        
+        # Validate units_per_bag
+        units_valid, units_int, units_error = validate_integer(
+            units_per_bag,
+            min_value=1,
+            max_value=10000,
+            allow_zero=False
+        )
+        if not units_valid:
+            errors.append(f'Units per bag: {units_error}')
+        
+        # Validate current_stock
+        stock_valid, stock_int, stock_error = validate_integer(
+            current_stock,
+            min_value=0,
+            max_value=100000,
+            allow_zero=True
+        )
+        if not stock_valid:
+            errors.append(f'Current stock: {stock_error}')
+        
+        # Validate image if provided
+        if image:
+            img_valid, img_error = validate_file_upload(
+                image,
+                allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+                max_size=MAX_IMAGE_SIZE
+            )
+            if not img_valid:
+                errors.append(f'Image: {img_error}')
         
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
             try:
-                cost_per_bag_decimal = Decimal(cost_per_bag)
-                units_per_bag_int = int(units_per_bag)
-                stock_int = int(current_stock) if current_stock else 0
+                # Use validated values from security utilities (already validated above)
+                # cost_per_bag_decimal, units_per_bag_int, stock_int already validated
+                item = Item.objects.create(
+                    name=name,
+                    category=category,
+                    cost_per_bag=cost_per_bag_decimal,
+                    units_per_bag=units_per_bag_int,
+                    current_stock=stock_int,
+                    is_spicy=is_spicy if category == 'snack' else False,
+                )
                 
-                if cost_per_bag_decimal <= 0:
-                    messages.error(request, 'Cost per bag/case must be greater than 0.')
-                elif units_per_bag_int <= 0:
-                    messages.error(request, 'Units per bag/case must be greater than 0.')
-                elif stock_int < 0:
-                    messages.error(request, 'Stock cannot be negative.')
-                else:
-                    # cost_price will be auto-calculated in the model's save() method
-                    item = Item.objects.create(
-                        name=name,
-                        category=category,
-                        cost_per_bag=cost_per_bag_decimal,
-                        units_per_bag=units_per_bag_int,
-                        current_stock=stock_int,
-                        is_spicy=is_spicy if category == 'snack' else False,
-                    )
-                    
-                    if image:
-                        item.image = image
-                        item.save()
-                    
-                    messages.success(request, f'Item "{name}" has been added to inventory. Cost per unit: ${item.cost_price:.4f}')
-                    return redirect('admin_inventory')
-            except ValueError:
-                messages.error(request, 'Please enter valid numbers.')
+                if image:
+                    item.image = image
+                    item.save()
+                
+                messages.success(request, f'Item "{name}" has been added to inventory. Cost per unit: ${item.cost_price:.4f}')
+                return redirect('admin_inventory')
             except Exception as e:
                 messages.error(request, f'An error occurred: {str(e)}')
     
@@ -1030,8 +1102,10 @@ def admin_edit_item(request, item_id):
     item = get_object_or_404(Item, id=item_id)
     
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        category = request.POST.get('category', '').strip()
+        from .security import sanitize_string, validate_decimal, validate_integer, validate_file_upload, ALLOWED_IMAGE_EXTENSIONS, MAX_IMAGE_SIZE
+        
+        name = sanitize_string(request.POST.get('name', ''), max_length=200)
+        category = sanitize_string(request.POST.get('category', ''), max_length=10)
         cost_per_bag = request.POST.get('cost_per_bag', '').strip()
         units_per_bag = request.POST.get('units_per_bag', '').strip()
         current_stock = request.POST.get('current_stock', '0').strip()
@@ -1039,54 +1113,78 @@ def admin_edit_item(request, item_id):
         image = request.FILES.get('image')
         remove_image = request.POST.get('remove_image') == 'on'
         
-        # Validation
+        # Security validation
         errors = []
         if not name:
             errors.append('Item name is required.')
         if not category or category not in ['snack', 'juice']:
             errors.append('Please select a valid category.')
-        if not cost_per_bag:
-            errors.append('Cost per bag/case is required.')
-        if not units_per_bag:
-            errors.append('Units per bag/case is required.')
+        
+        # Validate cost_per_bag
+        cost_valid, cost_per_bag_decimal, cost_error = validate_decimal(
+            cost_per_bag,
+            min_value=Decimal('0.01'),
+            allow_zero=False
+        )
+        if not cost_valid:
+            errors.append(f'Cost per bag: {cost_error}')
+        
+        # Validate units_per_bag
+        units_valid, units_per_bag_int, units_error = validate_integer(
+            units_per_bag,
+            min_value=1,
+            max_value=10000,
+            allow_zero=False
+        )
+        if not units_valid:
+            errors.append(f'Units per bag: {units_error}')
+        
+        # Validate current_stock
+        stock_valid, stock_int, stock_error = validate_integer(
+            current_stock,
+            min_value=0,
+            max_value=100000,
+            allow_zero=True
+        )
+        if not stock_valid:
+            errors.append(f'Current stock: {stock_error}')
+        
+        # Validate image if provided
+        if image:
+            img_valid, img_error = validate_file_upload(
+                image,
+                allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+                max_size=MAX_IMAGE_SIZE
+            )
+            if not img_valid:
+                errors.append(f'Image: {img_error}')
         
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
             try:
-                cost_per_bag_decimal = Decimal(cost_per_bag)
-                units_per_bag_int = int(units_per_bag)
-                stock_int = int(current_stock) if current_stock else 0
+                # Use validated values from security utilities (already validated above)
+                # cost_per_bag_decimal, units_per_bag_int, stock_int already validated
+                # Update item fields
+                item.name = name
+                item.category = category
+                item.cost_per_bag = cost_per_bag_decimal
+                item.units_per_bag = units_per_bag_int
+                item.current_stock = stock_int
+                item.is_spicy = is_spicy if category == 'snack' else False
                 
-                if cost_per_bag_decimal <= 0:
-                    messages.error(request, 'Cost per bag/case must be greater than 0.')
-                elif units_per_bag_int <= 0:
-                    messages.error(request, 'Units per bag/case must be greater than 0.')
-                elif stock_int < 0:
-                    messages.error(request, 'Stock cannot be negative.')
-                else:
-                    # Update item fields
-                    item.name = name
-                    item.category = category
-                    item.cost_per_bag = cost_per_bag_decimal
-                    item.units_per_bag = units_per_bag_int
-                    item.current_stock = stock_int
-                    item.is_spicy = is_spicy if category == 'snack' else False
-                    
-                    # Handle image
-                    if remove_image:
-                        item.image = None
-                    elif image:
-                        item.image = image
-                    
-                    # cost_price will be auto-calculated in the model's save() method
-                    item.save()
-                    
-                    messages.success(request, f'Item "{name}" has been updated. Cost per unit: ${item.cost_price:.2f}')
-                    return redirect('admin_inventory')
-            except ValueError:
-                messages.error(request, 'Please enter valid numbers.')
+                # Handle image
+                if remove_image:
+                    item.image = None
+                elif image:
+                    item.image = image
+                
+                # cost_price will be auto-calculated in the model's save() method
+                item.save()
+                
+                messages.success(request, f'Item "{name}" has been updated. Cost per unit: ${item.cost_price:.2f}')
+                return redirect('admin_inventory')
             except Exception as e:
                 messages.error(request, f'An error occurred: {str(e)}')
     
@@ -1102,13 +1200,20 @@ def admin_edit_item(request, item_id):
 @require_http_methods(["GET", "POST"])
 def admin_accounting(request):
     """Accounting page with receipt upload"""
-    from .models import Receipt, Order
+    from .models import Receipt, Order, CustomerOrder
     from django.db.models import Sum
     from decimal import Decimal
     
-    # Calculate total revenue from orders
-    completed_orders = Order.objects.filter(status='completed')
-    total_revenue_from_orders = completed_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    # Calculate total revenue from admin orders (Order model)
+    completed_admin_orders = Order.objects.filter(status='completed')
+    admin_revenue = completed_admin_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    
+    # Calculate total revenue from customer orders (CustomerOrder model)
+    completed_customer_orders = CustomerOrder.objects.filter(status='completed')
+    customer_revenue = completed_customer_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
+    
+    # Combine revenue from both order types
+    total_revenue_from_orders = admin_revenue + customer_revenue
     
     # Calculate total expenses from receipts
     total_expenses = Receipt.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
@@ -1120,9 +1225,11 @@ def admin_accounting(request):
     receipts = Receipt.objects.select_related('uploaded_by').order_by('-created_at')
     
     if request.method == 'POST':
-        title = request.POST.get('title', '').strip()
+        from .security import sanitize_string, validate_decimal, validate_file_upload, ALLOWED_DOCUMENT_EXTENSIONS, MAX_FILE_SIZE
+        
+        title = sanitize_string(request.POST.get('title', ''), max_length=200)
         amount = request.POST.get('amount', '').strip()
-        description = request.POST.get('description', '').strip()
+        description = sanitize_string(request.POST.get('description', ''), max_length=1000)
         receipt_file = request.FILES.get('receipt_file')
         
         if not title:
@@ -1132,19 +1239,38 @@ def admin_accounting(request):
         elif not receipt_file:
             messages.error(request, 'Receipt file is required.')
         else:
-            try:
-                amount_decimal = Decimal(amount)
-                receipt = Receipt.objects.create(
-                    title=title,
-                    amount=amount_decimal,
-                    description=description,
-                    receipt_file=receipt_file,
-                    uploaded_by=request.user
+            # Validate file upload
+            is_valid, error_msg = validate_file_upload(
+                receipt_file,
+                allowed_extensions=ALLOWED_DOCUMENT_EXTENSIONS,
+                max_size=MAX_FILE_SIZE
+            )
+            
+            if not is_valid:
+                messages.error(request, f'File validation failed: {error_msg}')
+            else:
+                # Validate amount
+                amount_valid, amount_decimal, amount_error = validate_decimal(
+                    amount,
+                    min_value=Decimal('0.01'),
+                    allow_zero=False
                 )
-                messages.success(request, f'Receipt "{receipt.title}" uploaded successfully!')
-                return redirect('admin_accounting')
-            except Exception as e:
-                messages.error(request, f'Error uploading receipt: {str(e)}')
+                
+                if not amount_valid:
+                    messages.error(request, f'Invalid amount: {amount_error}')
+                else:
+                    try:
+                        receipt = Receipt.objects.create(
+                            title=title,
+                            amount=amount_decimal,
+                            description=description,
+                            receipt_file=receipt_file,
+                            uploaded_by=request.user
+                        )
+                        messages.success(request, f'Receipt "{receipt.title}" uploaded successfully!')
+                        return redirect('admin_accounting')
+                    except Exception as e:
+                        messages.error(request, f'Error uploading receipt: {str(e)}')
     
     context = {
         'receipts': receipts,
@@ -1347,9 +1473,46 @@ def admin_customer_order_detail(request, order_id):
                         return redirect('admin_customer_orders')
         
         elif action == 'verify_payment':
+            # Only reduce inventory if it hasn't been reduced yet
+            # Check if order was previously in a status that would have reduced inventory
+            previous_status = order.status
             order.status = 'payment_verified'
             order.save()
-            messages.success(request, f'Payment for {order.order_reference} verified!')
+            
+            # Reduce inventory when payment is verified (order is confirmed)
+            # Only reduce if we're moving from a status that hasn't reduced inventory yet
+            if previous_status not in ['payment_verified', 'processing', 'completed']:
+                # Get all order items and reduce inventory
+                order_items = order.customer_order_items.select_related('item').all()
+                inventory_reduced = []
+                for order_item in order_items:
+                    item = order_item.item
+                    quantity_to_reduce = order_item.quantity
+                    
+                    # Check if we have enough stock
+                    if item.current_stock >= quantity_to_reduce:
+                        item.current_stock -= quantity_to_reduce
+                        item.save()
+                        inventory_reduced.append(f"{order_item.item.name} (-{quantity_to_reduce})")
+                    else:
+                        # Not enough stock - this shouldn't happen if validation worked, but handle it
+                        messages.warning(
+                            request, 
+                            f'Warning: Insufficient stock for {item.name}. '
+                            f'Required: {quantity_to_reduce}, Available: {item.current_stock}'
+                        )
+                
+                if inventory_reduced:
+                    messages.success(
+                        request, 
+                        f'Payment for {order.order_reference} verified! '
+                        f'Inventory reduced: {", ".join(inventory_reduced)}'
+                    )
+                else:
+                    messages.success(request, f'Payment for {order.order_reference} verified!')
+            else:
+                messages.success(request, f'Payment for {order.order_reference} verified!')
+            
             return redirect('admin_customer_orders')
         
         elif action == 'mark_processing':
@@ -1365,23 +1528,131 @@ def admin_customer_order_detail(request, order_id):
             return redirect('admin_customer_orders')
         
         elif action == 'cancel':
+            # Restore inventory if it was previously reduced (order was verified/processing/completed)
+            previous_status = order.status
             order.status = 'cancelled'
             order.admin_notes = request.POST.get('admin_notes', '')
             order.save()
-            messages.success(request, f'Order {order.order_reference} cancelled.')
+            
+            # Restore inventory if it was previously reduced
+            if previous_status in ['payment_verified', 'processing', 'completed']:
+                order_items = order.customer_order_items.select_related('item').all()
+                inventory_restored = []
+                for order_item in order_items:
+                    item = order_item.item
+                    quantity_to_restore = order_item.quantity
+                    item.current_stock += quantity_to_restore
+                    item.save()
+                    inventory_restored.append(f"{order_item.item.name} (+{quantity_to_restore})")
+                
+                if inventory_restored:
+                    messages.success(
+                        request, 
+                        f'Order {order.order_reference} cancelled. '
+                        f'Inventory restored: {", ".join(inventory_restored)}'
+                    )
+                else:
+                    messages.success(request, f'Order {order.order_reference} cancelled.')
+            else:
+                messages.success(request, f'Order {order.order_reference} cancelled.')
+            
+            return redirect('admin_customer_orders')
+        
+        elif action == 'delete':
+            # Delete the order permanently
+            order_ref = order.order_reference
+            # Delete all related order items first
+            order.customer_order_items.all().delete()
+            # Delete the order
+            order.delete()
+            messages.success(request, f'Order {order_ref} has been permanently deleted.')
             return redirect('admin_customer_orders')
         
         elif action == 'update_items':
-            # Update item quantities
+            from .views import BUNDLE_REQUIREMENTS
+            
+            # Update item quantities with security validation
+            from .security import validate_integer
+            
             for item in order_items:
                 qty_key = f'qty_{item.id}'
-                new_qty = request.POST.get(qty_key, '').strip()
-                if new_qty:
+                new_qty_str = request.POST.get(qty_key, '').strip()
+                if new_qty_str:
+                    # Validate quantity
+                    qty_valid, qty_value, qty_error = validate_integer(
+                        new_qty_str,
+                        min_value=0,
+                        max_value=10000,
+                        allow_zero=True
+                    )
+                    if not qty_valid:
+                        errors.append(f'{item.item.name}: {qty_error}')
+                        continue
+                    # Use validated integer value directly (already validated above)
+                    item.quantity = qty_value
+                    item.save()
                     try:
                         item.quantity = int(new_qty)
                         item.save()
                     except ValueError:
                         pass
+            
+            # Validate totals match bundle requirements (for fixed bundles)
+            if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                required_snacks = requirements.get('snacks', 0)
+                required_juices = requirements.get('juices', 0)
+                
+                # Calculate current totals
+                current_snacks = sum(
+                    oi.quantity for oi in order.customer_order_items.select_related('item')
+                    if oi.item.category == 'snack'
+                )
+                current_juices = sum(
+                    oi.quantity for oi in order.customer_order_items.select_related('item')
+                    if oi.item.category == 'juice'
+                )
+                
+                # Validate totals
+                errors = []
+                if required_snacks > 0 and current_snacks != required_snacks:
+                    errors.append(f'Total snacks must equal {required_snacks}. Current: {current_snacks}')
+                if required_juices > 0 and current_juices != required_juices:
+                    errors.append(f'Total juices must equal {required_juices}. Current: {current_juices}')
+                
+                if errors:
+                    for error in errors:
+                        messages.error(request, error)
+                    # Refresh order items for display
+                    order_items = order.customer_order_items.select_related('item')
+                    target_margin = Decimal(request.session.get('admin_margin_target', '38'))
+                    suggested_price = None
+                    if order.bundle_type == 'custom' and order.total_cost > 0:
+                        margin_factor = Decimal(str(1 - float(target_margin) / 100))
+                        if margin_factor > 0:
+                            suggested_price = int(order.total_cost / margin_factor / 100) * 100 + 100
+                    suggested_profit = None
+                    suggested_margin = None
+                    if suggested_price and order.total_cost > 0:
+                        suggested_profit = Decimal(str(suggested_price)) - order.total_cost
+                        if suggested_price > 0:
+                            suggested_margin = (suggested_profit / Decimal(str(suggested_price))) * 100
+                    
+                    # Get bundle requirements for validation display
+                    bundle_requirements = None
+                    if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                        bundle_requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                    
+                    context = {
+                        'order': order,
+                        'order_items': order_items,
+                        'suggested_price': suggested_price,
+                        'suggested_profit': suggested_profit,
+                        'suggested_margin': suggested_margin,
+                        'target_margin': target_margin,
+                        'bundle_requirements': bundle_requirements,
+                    }
+                    return render(request, 'admin/customer_order_detail.html', context)
             
             # Recalculate totals
             order.total_cost = sum(
@@ -1405,6 +1676,7 @@ def admin_customer_order_detail(request, order_id):
             # Re-run algorithm using the new generate_smart_bundle function
             from .utils import generate_smart_bundle
             from .models import Item
+            from .views import BUNDLE_REQUIREMENTS
             
             try:
                 margin_input = Decimal(request.POST.get('target_margin', '38').strip())
@@ -1416,18 +1688,20 @@ def admin_customer_order_detail(request, order_id):
             target_margin = margin_input
             request.session['admin_margin_target'] = str(margin_input)
 
-            # Calculate totals from current order
-            snack_total = 0
-            juice_total = 0
-            customer_favorites = []  # Starred items
+            # Get customer favorites (starred items)
+            customer_favorites = [oi.item for oi in order_items if oi.is_starred]
             
-            for item in order_items:
-                if item.item.category == 'snack':
-                    snack_total += item.quantity
-                elif item.item.category == 'juice':
-                    juice_total += item.quantity
-                if item.is_starred:
-                    customer_favorites.append(item.item)
+            # For fixed bundles, use the correct bundle requirements (not current order quantities)
+            # For custom bundles, calculate from current order
+            if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                # Fixed bundle - use correct requirements
+                requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                snack_total = requirements.get('snacks', 0)
+                juice_total = requirements.get('juices', 0)
+            else:
+                # Custom bundle - calculate from current order
+                snack_total = sum(oi.quantity for oi in order_items if oi.item.category == 'snack')
+                juice_total = sum(oi.quantity for oi in order_items if oi.item.category == 'juice')
             
             # Build bundle config
             # For fixed bundles, use the fixed revenue; for custom, calculate based on target margin
@@ -1446,8 +1720,8 @@ def admin_customer_order_detail(request, order_id):
                 'packaging_cost': Decimal('0'),
             }
             
-            # Run the smart bundle algorithm
-            result = generate_smart_bundle(bundle_config, customer_favorites)
+            # Run the smart bundle algorithm (no excluded items in admin context)
+            result = generate_smart_bundle(bundle_config, customer_favorites, excluded_item_ids=None)
             
             # Clear existing order items and create new ones based on result
             order.customer_order_items.all().delete()
@@ -1500,6 +1774,12 @@ def admin_customer_order_detail(request, order_id):
         if suggested_price > 0:
             suggested_margin = (suggested_profit / Decimal(str(suggested_price))) * 100
     
+    # Get bundle requirements for validation display
+    from .views import BUNDLE_REQUIREMENTS
+    bundle_requirements = None
+    if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+        bundle_requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+    
     context = {
         'order': order,
         'order_items': order_items,
@@ -1507,6 +1787,7 @@ def admin_customer_order_detail(request, order_id):
         'suggested_profit': suggested_profit,
         'suggested_margin': suggested_margin,
         'target_margin': target_margin,
+        'bundle_requirements': bundle_requirements,
     }
     return render(request, 'admin/customer_order_detail.html', context)
 

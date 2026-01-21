@@ -5,13 +5,16 @@
 
 {% block extra_css %}
 <style>
-    .item-card.excluded {
-        border-color: #ef4444 !important;
-        background-color: #fef2f2 !important;
-        opacity: 0.6;
+    .item-card.selected {
+        border-color: #10b981 !important;
+        background-color: #f0fdf4 !important;
+        box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
     }
-    .item-card.excluded .excluded-icon {
+    .item-card.selected .selected-icon {
         display: flex !important;
+    }
+    .item-card:not(.selected) {
+        opacity: 0.6;
     }
     .star-btn.starred {
         color: #eab308 !important;
@@ -36,13 +39,13 @@
             </p>
         </div>
         
-        <!-- Progress Bar -->
+        <!-- Progress Bar (Clickable Navigation) -->
         <div class="flex items-center justify-center mb-8">
             <div class="flex items-center space-x-4">
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold">✓</div>
-                    <span class="ml-2 text-green-600">Bundle</span>
-                </div>
+                <a href="{% url 'core:bundle_builder' %}" class="flex items-center group cursor-pointer hover:opacity-80 transition">
+                    <div class="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold group-hover:bg-green-600">✓</div>
+                    <span class="ml-2 text-green-600 group-hover:text-green-700 font-semibold">Bundle</span>
+                </a>
                 <div class="w-16 h-1 bg-orange-500"></div>
                 <div class="flex items-center">
                     <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
@@ -63,16 +66,16 @@
                 <div>
                     <p class="text-blue-800 font-semibold mb-1">How it works:</p>
                     <ul class="text-blue-700 text-sm space-y-1">
-                        <li>• <strong>All items are included by default</strong> - your bundle will contain all available items</li>
-                        <li>• <strong>Click</strong> on items you <strong>DON'T want</strong> to exclude them from your bundle</li>
+                        <li>• <strong>Click</strong> on items you <strong>WANT</strong> to include them in your bundle</li>
                         <li>• <strong>Star ⭐</strong> up to 2 items in each category to request more of those items</li>
+                        <li>• <strong>Not selecting any items?</strong> <a href="{% url 'core:bundle_builder' %}" class="text-blue-600 underline font-semibold">Go back</a> and choose "Random Selection" for automatic bundle creation</li>
                         {% if is_custom %}
                         <li>• <strong>Your custom bundle:</strong> 
                             {% if custom_snack_qty > 0 %}{{ custom_snack_qty }} snacks{% endif %}
                             {% if custom_snack_qty > 0 and custom_juice_qty > 0 %} and {% endif %}
                             {% if custom_juice_qty > 0 %}{{ custom_juice_qty }} juices{% endif %}
                         </li>
-                        <li>• The quantities will be distributed among included items (starred items get more)</li>
+                        <li>• The quantities will be distributed among selected items (starred items get more)</li>
                         {% endif %}
                     </ul>
                 </div>
@@ -93,20 +96,20 @@
                         {% endif %}
                     </h2>
                     <div class="flex items-center gap-4">
-                        <span class="text-sm text-gray-600">Excluded: <span id="snack-excluded-count" class="font-bold text-red-600">0</span></span>
+                        <span class="text-sm text-gray-600">Selected: <span id="snack-selected-count" class="font-bold text-green-600">0</span></span>
                         <span class="text-sm text-gray-600">Starred: <span id="snack-star-count" class="font-bold text-yellow-500">0</span>/2</span>
                     </div>
                 </div>
                 
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {% for snack in snacks %}
-                    <div class="item-card bg-white rounded-xl border-2 border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg cursor-pointer relative {% if snack.id in excluded_snacks %}excluded{% endif %}"
+                    <div class="item-card bg-white rounded-xl border-2 border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg cursor-pointer relative {% if snack.id in selected_snacks %}selected{% endif %}"
                          data-item-id="{{ snack.id }}" data-category="snack">
                         
-                        <!-- Excluded Icon -->
-                        <div class="excluded-icon absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full items-center justify-center text-white hidden">
+                        <!-- Selected Icon -->
+                        <div class="selected-icon absolute top-2 right-2 w-6 h-6 bg-green-500 rounded-full items-center justify-center text-white hidden">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
                             </svg>
                         </div>
                         
@@ -136,7 +139,7 @@
                         </button>
                         
                         <!-- Hidden Inputs -->
-                        <input type="checkbox" name="excluded_snacks" value="{{ snack.id }}" class="hidden exclude-checkbox" {% if snack.id in excluded_snacks %}checked{% endif %}>
+                        <input type="checkbox" name="selected_snacks" value="{{ snack.id }}" class="hidden select-checkbox" {% if snack.id in selected_snacks %}checked{% endif %}>
                         <input type="checkbox" name="starred_snacks" value="{{ snack.id }}" class="hidden star-checkbox" {% if snack.id in starred_snacks %}checked{% endif %}>
                     </div>
                     {% empty %}
@@ -157,20 +160,20 @@
                         {% endif %}
                     </h2>
                     <div class="flex items-center gap-4">
-                        <span class="text-sm text-gray-600">Excluded: <span id="juice-excluded-count" class="font-bold text-red-600">0</span></span>
+                        <span class="text-sm text-gray-600">Selected: <span id="juice-selected-count" class="font-bold text-green-600">0</span></span>
                         <span class="text-sm text-gray-600">Starred: <span id="juice-star-count" class="font-bold text-yellow-500">0</span>/2</span>
                     </div>
                 </div>
                 
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {% for juice in juices %}
-                    <div class="item-card bg-white rounded-xl border-2 border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg cursor-pointer relative {% if juice.id in excluded_juices %}excluded{% endif %}"
+                    <div class="item-card bg-white rounded-xl border-2 border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg cursor-pointer relative {% if juice.id in selected_juices %}selected{% endif %}"
                          data-item-id="{{ juice.id }}" data-category="juice">
                         
-                        <!-- Excluded Icon -->
-                        <div class="excluded-icon absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full items-center justify-center text-white hidden">
+                        <!-- Selected Icon -->
+                        <div class="selected-icon absolute top-2 right-2 w-6 h-6 bg-green-500 rounded-full items-center justify-center text-white hidden">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
                             </svg>
                         </div>
                         
@@ -197,7 +200,7 @@
                         </button>
                         
                         <!-- Hidden Inputs -->
-                        <input type="checkbox" name="excluded_juices" value="{{ juice.id }}" class="hidden exclude-checkbox" {% if juice.id in excluded_juices %}checked{% endif %}>
+                        <input type="checkbox" name="selected_juices" value="{{ juice.id }}" class="hidden select-checkbox" {% if juice.id in selected_juices %}checked{% endif %}>
                         <input type="checkbox" name="starred_juices" value="{{ juice.id }}" class="hidden star-checkbox" {% if juice.id in starred_juices %}checked{% endif %}>
                     </div>
                     {% empty %}
@@ -212,8 +215,8 @@
                 <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div class="flex items-center gap-6">
                         <div class="text-center">
-                            <div class="text-2xl font-black text-red-600" id="total-excluded">0</div>
-                            <div class="text-xs text-gray-500">Items Excluded</div>
+                            <div class="text-2xl font-black text-green-600" id="total-selected">0</div>
+                            <div class="text-xs text-gray-500">Items Selected</div>
                         </div>
                         <div class="text-center">
                             <div class="text-2xl font-black text-yellow-500" id="total-starred">0</div>
@@ -240,24 +243,24 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle item card clicks (exclusion model)
+    // Handle item card clicks (inclusion model)
     document.querySelectorAll('.item-card').forEach(card => {
         card.addEventListener('click', function() {
-            const excludeCheckbox = this.querySelector('.exclude-checkbox');
-            excludeCheckbox.checked = !excludeCheckbox.checked;
-            this.classList.toggle('excluded', excludeCheckbox.checked);
+            const selectCheckbox = this.querySelector('.select-checkbox');
+            selectCheckbox.checked = !selectCheckbox.checked;
+            this.classList.toggle('selected', selectCheckbox.checked);
             
-            // Show/hide excluded icon
-            const excludedIcon = this.querySelector('.excluded-icon');
-            if (excludeCheckbox.checked) {
-                excludedIcon.style.display = 'flex';
-                // Also unstar if excluded
+            // Show/hide selected icon
+            const selectedIcon = this.querySelector('.selected-icon');
+            if (selectCheckbox.checked) {
+                selectedIcon.style.display = 'flex';
+            } else {
+                selectedIcon.style.display = 'none';
+                // Also unstar if deselected
                 const starCheckbox = this.querySelector('.star-checkbox');
                 const starBtn = this.querySelector('.star-btn');
                 starCheckbox.checked = false;
                 starBtn.classList.remove('starred');
-            } else {
-                excludedIcon.style.display = 'none';
             }
             
             updateCounts();
@@ -266,10 +269,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize counts and visual state
     document.querySelectorAll('.item-card').forEach(card => {
-        const excludeCheckbox = card.querySelector('.exclude-checkbox');
-        const excludedIcon = card.querySelector('.excluded-icon');
-        if (excludeCheckbox.checked) {
-            excludedIcon.style.display = 'flex';
+        const selectCheckbox = card.querySelector('.select-checkbox');
+        const selectedIcon = card.querySelector('.selected-icon');
+        if (selectCheckbox.checked) {
+            selectedIcon.style.display = 'flex';
         }
     });
     
@@ -278,12 +281,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function toggleStar(btn, itemId, category) {
     const card = btn.closest('.item-card');
-    const excludeCheckbox = card.querySelector('.exclude-checkbox');
+    const selectCheckbox = card.querySelector('.select-checkbox');
     const starCheckbox = card.querySelector('.star-checkbox');
     
-    // Cannot star excluded items
-    if (excludeCheckbox.checked) {
-        alert('You cannot star an item that is excluded. Please include it first.');
+    // Cannot star unselected items
+    if (!selectCheckbox.checked) {
+        alert('You must select an item first before starring it.');
         return;
     }
     
@@ -303,22 +306,22 @@ function toggleStar(btn, itemId, category) {
 }
 
 function updateCounts() {
-    const snackExcludedCount = document.querySelectorAll('[data-category="snack"] .exclude-checkbox:checked').length;
-    const juiceExcludedCount = document.querySelectorAll('[data-category="juice"] .exclude-checkbox:checked').length;
+    const snackSelectedCount = document.querySelectorAll('[data-category="snack"] .select-checkbox:checked').length;
+    const juiceSelectedCount = document.querySelectorAll('[data-category="juice"] .select-checkbox:checked').length;
     const snackStarCount = document.querySelectorAll('[data-category="snack"] .star-checkbox:checked').length;
     const juiceStarCount = document.querySelectorAll('[data-category="juice"] .star-checkbox:checked').length;
     
-    const snackExcludedEl = document.getElementById('snack-excluded-count');
-    const juiceExcludedEl = document.getElementById('juice-excluded-count');
+    const snackSelectedEl = document.getElementById('snack-selected-count');
+    const juiceSelectedEl = document.getElementById('juice-selected-count');
     const snackStarCountEl = document.getElementById('snack-star-count');
     const juiceStarCountEl = document.getElementById('juice-star-count');
     
-    if (snackExcludedEl) snackExcludedEl.textContent = snackExcludedCount;
-    if (juiceExcludedEl) juiceExcludedEl.textContent = juiceExcludedCount;
+    if (snackSelectedEl) snackSelectedEl.textContent = snackSelectedCount;
+    if (juiceSelectedEl) juiceSelectedEl.textContent = juiceSelectedCount;
     if (snackStarCountEl) snackStarCountEl.textContent = snackStarCount;
     if (juiceStarCountEl) juiceStarCountEl.textContent = juiceStarCount;
     
-    document.getElementById('total-excluded').textContent = snackExcludedCount + juiceExcludedCount;
+    document.getElementById('total-selected').textContent = snackSelectedCount + juiceSelectedCount;
     document.getElementById('total-starred').textContent = snackStarCount + juiceStarCount;
 }
 </script>
