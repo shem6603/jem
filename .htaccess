@@ -5,25 +5,28 @@
 RewriteEngine On
 
 # Serve media files directly (uploaded files)
+# If the file exists, serve it directly (don't rewrite)
 RewriteCond %{REQUEST_URI} ^/media/
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^(.*)$ - [L]
 
 # Serve static files directly
+# If the file exists, serve it directly (don't rewrite)
 RewriteCond %{REQUEST_URI} ^/static/
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^(.*)$ - [L]
 
-# Don't rewrite files or directories
+# Don't rewrite files or directories that exist
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
 # Rewrite everything else to passenger_wsgi.py
+# This includes /media/ requests where file doesn't exist (Django will serve it)
 RewriteRule ^(.*)$ passenger_wsgi.py/$1 [L]
 
 # Serve static and media files directly with caching
 <IfModule mod_headers.c>
-    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$">
+    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|ico|svg|webp|woff|woff2|ttf|eot|pdf)$">
         Header set Cache-Control "max-age=31536000, public"
     </FilesMatch>
 </IfModule>

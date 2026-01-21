@@ -15,10 +15,45 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import FileResponse, Http404
+from django.views.static import serve
 from core import admin_views, views
+import os
+import mimetypes
+
+
+def serve_media(request, path):
+    """
+    Custom media file serving view that works in production.
+    This serves files from MEDIA_ROOT.
+    """
+    # Security: prevent directory traversal attacks
+    path = path.replace('..', '').lstrip('/')
+    
+    # Build the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, path)
+    
+    # Check if file exists
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        raise Http404(f"Media file not found: {path}")
+    
+    # Get the content type
+    content_type, encoding = mimetypes.guess_type(file_path)
+    if content_type is None:
+        content_type = 'application/octet-stream'
+    
+    # Serve the file
+    try:
+        response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+        # Add cache headers for performance
+        response['Cache-Control'] = 'public, max-age=86400'  # Cache for 1 day
+        return response
+    except IOError:
+        raise Http404(f"Cannot read media file: {path}")
+
 
 urlpatterns = [
     # Favicon handler (browsers automatically request /favicon.ico)
@@ -51,15 +86,13 @@ urlpatterns = [
     path('', include('core.urls')),
 ]
 
-# Serve media files
-# In production, configure your web server (Apache/Nginx) to serve /media/ directory
-# For development, Django will serve them automatically
+# Serve media files - use custom view that works in production
+# This MUST be added regardless of DEBUG setting
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve_media, name='serve_media'),
+]
+
+# Serve static files in development
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    # Serve static files from STATICFILES_DIRS in development
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
-else:
-    # In production, serve media files via Django (not recommended for high traffic)
-    # Better to configure web server to serve /media/ directory directly
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
