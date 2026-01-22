@@ -318,8 +318,8 @@ PWA_APP_OFFLINE_URL = '/offline/'
 # Generate these keys using: python -m pywebpush generate_vapid_key
 # Or use: web-push generate-vapid-keys
 # Store these securely - never commit private key to version control
-VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
-VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg_HV4PNhpBQbZMoRL2YvNYLwi04ixHAU_FfahS81JH7uhRANCAAT1ucKkEamDYixn4-jKkzTunKAM0YtyzSmmmhkpg7ULw0nzR1kY00BdqQ9aBNJ7APfueOMyUm9rFQDldZQcrfw0')
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '9bnCpBGpg2IsZ-PoypM07pygDNGLcs0pppoZKYO1C8NJ80dZGNNAXakPWgTSewD37njjMlJvaxUA5XWUHK38NA')
 VAPID_CLAIMS = {
-    "sub": "mailto:your-email@example.com"  # Change to your contact email
+    "sub": "shemmaricketts@gmail.com"  # Change to your contact email
 }
