@@ -389,3 +389,21 @@ class BankingInfo(models.Model):
     
     def __str__(self):
         return f"{self.bank_name} - {self.account_number}"
+
+
+class PushSubscription(models.Model):
+    """Store push notification subscriptions for users"""
+    endpoint = models.URLField(max_length=500, unique=True)
+    keys = models.JSONField(help_text="Auth and p256dh keys")
+    user_agent = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['endpoint']),
+        ]
+    
+    def __str__(self):
+        return f"Push Subscription - {self.endpoint[:50]}..."

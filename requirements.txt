@@ -5,6 +5,7 @@ whitenoise>=6.5.0
 Pillow>=10.0.0
 pulp>=2.7.0
 django-pwa>=1.0.9
+pywebpush>=1.14.0
 
 # Database drivers (install based on your database choice)
 # For MySQL/MariaDB (GoDaddy uses MySQL/MariaDB):

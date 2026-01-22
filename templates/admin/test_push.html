@@ -1,0 +1,302 @@
+{% extends 'admin/base.html' %}
+{% load static %}
+
+{% block title %}Test Push Notifications - J.E.M Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    .status-connected { background-color: #10b981; }
+    .status-disconnected { background-color: #ef4444; }
+    .status-checking { background-color: #f59e0b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-black text-gray-900 mb-2">🔔 Test Push Notifications</h1>
+    <p class="text-gray-600">Test push notification functionality</p>
+</div>
+
+<!-- Status Card -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Connection Status</h2>
+    <div class="space-y-3">
+        <div class="flex items-center">
+            <span class="status-indicator" id="service-worker-status"></span>
+            <span class="text-gray-700">Service Worker: <span id="service-worker-text">Checking...</span></span>
+        </div>
+        <div class="flex items-center">
+            <span class="status-indicator" id="push-status"></span>
+            <span class="text-gray-700">Push Support: <span id="push-text">Checking...</span></span>
+        </div>
+        <div class="flex items-center">
+            <span class="status-indicator" id="subscription-status"></span>
+            <span class="text-gray-700">Subscription: <span id="subscription-text">Checking...</span></span>
+        </div>
+        <div class="flex items-center">
+            <span class="status-indicator" id="vapid-key-status"></span>
+            <span class="text-gray-700">VAPID Key: <span id="vapid-key-text">Checking...</span></span>
+        </div>
+    </div>
+</div>
+
+<!-- Subscribe/Unsubscribe Card -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Subscription Management</h2>
+    <div class="space-y-4">
+        <div>
+            <button id="subscribe-btn" class="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                🔔 Subscribe to Push Notifications
+            </button>
+            <button id="unsubscribe-btn" class="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:from-red-600 hover:to-red-700 transition-all ml-3 disabled:opacity-50 disabled:cursor-not-allowed" style="display: none;">
+                🔕 Unsubscribe
+            </button>
+        </div>
+        <div id="subscription-info" class="p-4 bg-gray-50 rounded-lg" style="display: none;">
+            <p class="text-sm text-gray-600"><strong>Endpoint:</strong> <span id="endpoint-display" class="font-mono text-xs break-all"></span></p>
+        </div>
+    </div>
+</div>
+
+<!-- Send Test Notification Card -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Send Test Notification</h2>
+    <form id="test-notification-form" class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <input type="text" id="notification-title" value="Test Notification" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+            <textarea id="notification-body" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">This is a test push notification from J.E.M!</textarea>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">URL (when clicked)</label>
+            <input type="text" id="notification-url" value="/" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+        </div>
+        <button type="submit" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            📤 Send Test Notification
+        </button>
+    </form>
+    <div id="notification-result" class="mt-4 p-4 rounded-lg" style="display: none;"></div>
+</div>
+
+<!-- Instructions Card -->
+<div class="bg-blue-50 border border-blue-200 rounded-xl p-6">
+    <h2 class="text-xl font-bold text-blue-900 mb-4">📋 Testing Instructions</h2>
+    <ol class="list-decimal list-inside space-y-2 text-blue-800">
+        <li>Check that all status indicators are green</li>
+        <li>Click "Subscribe to Push Notifications" and grant permission when prompted</li>
+        <li>Fill in the test notification form and click "Send Test Notification"</li>
+        <li>You should receive a notification even if the browser/app is closed</li>
+        <li>Click the notification to verify it opens the correct URL</li>
+    </ol>
+    <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <p class="text-sm text-yellow-800"><strong>Note:</strong> Push notifications require HTTPS in production. Localhost works for testing.</p>
+    </div>
+</div>
+
+<script src="{% static 'js/push-notifications.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const subscribeBtn = document.getElementById('subscribe-btn');
+    const unsubscribeBtn = document.getElementById('unsubscribe-btn');
+    const subscriptionInfo = document.getElementById('subscription-info');
+    const testForm = document.getElementById('test-notification-form');
+    const notificationResult = document.getElementById('notification-result');
+
+    // Check service worker status
+    async function checkServiceWorker() {
+        const statusEl = document.getElementById('service-worker-status');
+        const textEl = document.getElementById('service-worker-text');
+        
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                statusEl.className = 'status-indicator status-connected';
+                textEl.textContent = 'Active';
+            } catch (e) {
+                statusEl.className = 'status-indicator status-disconnected';
+                textEl.textContent = 'Not registered';
+            }
+        } else {
+            statusEl.className = 'status-indicator status-disconnected';
+            textEl.textContent = 'Not supported';
+        }
+    }
+
+    // Check push support
+    function checkPushSupport() {
+        const statusEl = document.getElementById('push-status');
+        const textEl = document.getElementById('push-text');
+        
+        if ('PushManager' in window) {
+            statusEl.className = 'status-indicator status-connected';
+            textEl.textContent = 'Supported';
+        } else {
+            statusEl.className = 'status-indicator status-disconnected';
+            textEl.textContent = 'Not supported';
+        }
+    }
+
+    // Check VAPID key
+    async function checkVAPIDKey() {
+        const statusEl = document.getElementById('vapid-key-status');
+        const textEl = document.getElementById('vapid-key-text');
+        
+        try {
+            const response = await fetch('/push/vapid-key/');
+            const data = await response.json();
+            if (data.publicKey) {
+                window.VAPID_PUBLIC_KEY = data.publicKey;
+                statusEl.className = 'status-indicator status-connected';
+                textEl.textContent = 'Configured';
+            } else {
+                statusEl.className = 'status-indicator status-disconnected';
+                textEl.textContent = 'Not configured';
+            }
+        } catch (e) {
+            statusEl.className = 'status-indicator status-disconnected';
+            textEl.textContent = 'Error loading';
+        }
+    }
+
+    // Check subscription status
+    async function checkSubscription() {
+        const statusEl = document.getElementById('subscription-status');
+        const textEl = document.getElementById('subscription-text');
+        
+        const isSubscribed = await PushNotifications.isSubscribed();
+        if (isSubscribed) {
+            statusEl.className = 'status-indicator status-connected';
+            textEl.textContent = 'Subscribed';
+            subscribeBtn.style.display = 'none';
+            unsubscribeBtn.style.display = 'inline-block';
+            
+            // Get subscription details
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            if (subscription) {
+                subscriptionInfo.style.display = 'block';
+                document.getElementById('endpoint-display').textContent = subscription.endpoint;
+            }
+        } else {
+            statusEl.className = 'status-indicator status-disconnected';
+            textEl.textContent = 'Not subscribed';
+            subscribeBtn.style.display = 'inline-block';
+            unsubscribeBtn.style.display = 'none';
+            subscriptionInfo.style.display = 'none';
+        }
+    }
+
+    // Subscribe button
+    subscribeBtn.addEventListener('click', async function() {
+        subscribeBtn.disabled = true;
+        subscribeBtn.textContent = 'Subscribing...';
+        
+        const success = await PushNotifications.subscribe();
+        if (success) {
+            await checkSubscription();
+            alert('Successfully subscribed to push notifications!');
+        } else {
+            alert('Failed to subscribe. Please check browser console for details.');
+        }
+        
+        subscribeBtn.disabled = false;
+        subscribeBtn.textContent = '🔔 Subscribe to Push Notifications';
+    });
+
+    // Unsubscribe button
+    unsubscribeBtn.addEventListener('click', async function() {
+        unsubscribeBtn.disabled = true;
+        unsubscribeBtn.textContent = 'Unsubscribing...';
+        
+        const success = await PushNotifications.unsubscribe();
+        if (success) {
+            await checkSubscription();
+            alert('Successfully unsubscribed from push notifications.');
+        } else {
+            alert('Failed to unsubscribe. Please check browser console for details.');
+        }
+        
+        unsubscribeBtn.disabled = false;
+        unsubscribeBtn.textContent = '🔕 Unsubscribe';
+    });
+
+    // Test notification form
+    testForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const title = document.getElementById('notification-title').value;
+        const body = document.getElementById('notification-body').value;
+        const url = document.getElementById('notification-url').value;
+        
+        const submitBtn = testForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+        
+        try {
+            const response = await fetch('{% url "admin_test_push" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    title: title,
+                    body: body,
+                    url: url
+                })
+            });
+            
+            const data = await response.json();
+            
+            notificationResult.style.display = 'block';
+            if (data.success) {
+                notificationResult.className = 'mt-4 p-4 bg-green-50 border border-green-200 rounded-lg';
+                notificationResult.innerHTML = `<p class="text-green-800"><strong>Success!</strong> ${data.message}</p>`;
+            } else {
+                notificationResult.className = 'mt-4 p-4 bg-red-50 border border-red-200 rounded-lg';
+                notificationResult.innerHTML = `<p class="text-red-800"><strong>Error:</strong> ${data.error}</p>`;
+            }
+        } catch (error) {
+            notificationResult.style.display = 'block';
+            notificationResult.className = 'mt-4 p-4 bg-red-50 border border-red-200 rounded-lg';
+            notificationResult.innerHTML = `<p class="text-red-800"><strong>Error:</strong> ${error.message}</p>`;
+        }
+        
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📤 Send Test Notification';
+    });
+
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Initialize checks
+    await checkServiceWorker();
+    checkPushSupport();
+    await checkVAPIDKey();
+    await checkSubscription();
+});
+</script>
+{% endblock %}

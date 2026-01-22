@@ -7,7 +7,7 @@ from django.http import JsonResponse, HttpResponseRedirect
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
-from .models import Item, BundleType, Customer, Order, OrderItem, CustomerOrder, CustomerOrderItem, BankingInfo
+from .models import Item, BundleType, Customer, Order, OrderItem, CustomerOrder, CustomerOrderItem, BankingInfo, PushSubscription
 
 
 def csrf_failure(request, reason=""):
@@ -690,3 +690,132 @@ def clear_bundle_session(request):
         request.session.pop(key, None)
     messages.info(request, 'Order session cleared.')
     return redirect('core:bundle_builder')
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def push_subscribe(request):
+    """Register a push notification subscription"""
+    import json
+    
+    try:
+        data = json.loads(request.body)
+        endpoint = data.get('endpoint')
+        keys = data.get('keys', {})
+        
+        if not endpoint or not keys:
+            return JsonResponse({'error': 'Missing endpoint or keys'}, status=400)
+        
+        # Get or create subscription
+        subscription, created = PushSubscription.objects.get_or_create(
+            endpoint=endpoint,
+            defaults={
+                'keys': keys,
+                'user_agent': request.META.get('HTTP_USER_AGENT', '')[:200]
+            }
+        )
+        
+        if not created:
+            # Update existing subscription
+            subscription.keys = keys
+            subscription.user_agent = request.META.get('HTTP_USER_AGENT', '')[:200]
+            subscription.save()
+        
+        return JsonResponse({'success': True, 'message': 'Subscription registered'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def push_unsubscribe(request):
+    """Unregister a push notification subscription"""
+    import json
+    
+    try:
+        data = json.loads(request.body)
+        endpoint = data.get('endpoint')
+        
+        if not endpoint:
+            return JsonResponse({'error': 'Missing endpoint'}, status=400)
+        
+        PushSubscription.objects.filter(endpoint=endpoint).delete()
+        
+        return JsonResponse({'success': True, 'message': 'Subscription removed'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def send_push_notification(request):
+    """Send push notification to all subscribers (admin only)"""
+    import json
+    from pywebpush import webpush, WebPushException
+    from django.conf import settings
+    
+    try:
+        data = json.loads(request.body)
+        title = data.get('title', 'J.E.M - Just Eat More')
+        body = data.get('body', 'You have a new notification!')
+        url = data.get('url', '/')
+        icon = data.get('icon', '/static/favicons/icon-192.png')
+        
+        # Get VAPID keys from settings
+        vapid_private_key = getattr(settings, 'VAPID_PRIVATE_KEY', None)
+        vapid_public_key = getattr(settings, 'VAPID_PUBLIC_KEY', None)
+        vapid_claims = getattr(settings, 'VAPID_CLAIMS', {})
+        
+        if not vapid_private_key or not vapid_public_key:
+            return JsonResponse({
+                'error': 'VAPID keys not configured. Please set VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY in settings.'
+            }, status=500)
+        
+        # Get all subscriptions
+        subscriptions = PushSubscription.objects.all()
+        success_count = 0
+        error_count = 0
+        
+        notification_payload = json.dumps({
+            'title': title,
+            'body': body,
+            'icon': icon,
+            'badge': icon,
+            'url': url,
+            'tag': 'jem-notification',
+            'data': {'url': url}
+        })
+        
+        for subscription in subscriptions:
+            try:
+                webpush(
+                    subscription_info={
+                        'endpoint': subscription.endpoint,
+                        'keys': subscription.keys
+                    },
+                    data=notification_payload,
+                    vapid_private_key=vapid_private_key,
+                    vapid_claims=vapid_claims
+                )
+                success_count += 1
+            except WebPushException as e:
+                # If subscription is invalid, remove it
+                if e.response and e.response.status_code in [410, 404]:
+                    subscription.delete()
+                error_count += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Notification sent to {success_count} subscribers',
+            'success_count': success_count,
+            'error_count': error_count
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def get_vapid_public_key(request):
+    """Return VAPID public key for client-side push subscription"""
+    from django.conf import settings
+    vapid_public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
+    return JsonResponse({'publicKey': vapid_public_key})

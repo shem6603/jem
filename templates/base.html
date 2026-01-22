@@ -318,11 +318,24 @@
                 navigator.serviceWorker.register('/serviceworker.js')
                     .then(function(registration) {
                         console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                        
+                        // Load VAPID public key for push notifications
+                        fetch('/push/vapid-key/')
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.publicKey) {
+                                    window.VAPID_PUBLIC_KEY = data.publicKey;
+                                }
+                            })
+                            .catch(err => console.log('Could not load VAPID key:', err));
                     }, function(err) {
                         console.log('ServiceWorker registration failed: ', err);
                     });
             });
         }
     </script>
+    
+    <!-- Push Notifications -->
+    <script src="{% static 'js/push-notifications.js' %}"></script>
 </body>
 </html>

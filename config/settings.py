@@ -273,22 +273,53 @@ PWA_APP_SPLASH_SCREEN = [
 PWA_APP_DIR = 'ltr'
 PWA_APP_LANG = 'en-US'
 PWA_APP_SHORT_NAME = 'J.E.M'
-PWA_APP_ID = '/jem-app/'
+PWA_APP_ID = 'com.jem.justeatmore'
 PWA_SERVICE_WORKER_PATH = os.path.join(BASE_DIR, 'static', 'js', 'serviceworker.js')
 
-# PWA Screenshots for app store (replace with actual screenshots)
+# PWA Screenshots for app store (mobile portrait screenshots)
+# Only include screenshots that actually exist in static/screenshots/
 PWA_APP_SCREENSHOTS = [
     {
-        'src': '/static/screenshots/screenshot-wide.png',
-        'sizes': '1280x720',
-        'type': 'image/png'
+        'src': '/static/screenshots/Screenshot 2026-01-21 135800.png',
+        'sizes': '466x839',
+        'type': 'image/png',
+        'form_factor': 'narrow'
     },
     {
-        'src': '/static/screenshots/screenshot-mobile.png',
-        'sizes': '540x720',
-        'type': 'image/png'
+        'src': '/static/screenshots/Screenshot 2026-01-21 135836.png',
+        'sizes': '474x839',
+        'type': 'image/png',
+        'form_factor': 'narrow'
+    },
+    {
+        'src': '/static/screenshots/Screenshot 2026-01-21 135922.png',
+        'sizes': '469x843',
+        'type': 'image/png',
+        'form_factor': 'narrow'
+    },
+    {
+        'src': '/static/screenshots/Screenshot 2026-01-21 135939.png',
+        'sizes': '474x839',
+        'type': 'image/png',
+        'form_factor': 'narrow'
+    },
+    {
+        'src': '/static/screenshots/Screenshot 2026-01-21 140006.png',
+        'sizes': '467x836',
+        'type': 'image/png',
+        'form_factor': 'narrow'
     }
 ]
 
 # PWA Offline support
 PWA_APP_OFFLINE_URL = '/offline/'
+
+# Push Notifications (VAPID Keys)
+# Generate these keys using: python -m pywebpush generate_vapid_key
+# Or use: web-push generate-vapid-keys
+# Store these securely - never commit private key to version control
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '')
+VAPID_CLAIMS = {
+    "sub": "mailto:your-email@example.com"  # Change to your contact email
+}

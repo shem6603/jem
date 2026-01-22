@@ -1843,3 +1843,36 @@ def admin_banking_info(request):
         'banking_info': banking_info,
     }
     return render(request, 'admin/banking_info.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_user, login_url='admin_login')
+@csrf_protect
+@require_http_methods(["GET", "POST"])
+def admin_test_push(request):
+    """Test push notifications page"""
+    from .models import PushSubscription
+    from .push_utils import send_push_notification_to_all
+    
+    subscription_count = PushSubscription.objects.count()
+    
+    if request.method == 'POST':
+        import json
+        data = json.loads(request.body)
+        title = data.get('title', 'Test Notification')
+        body = data.get('body', 'This is a test push notification!')
+        url = data.get('url', '/')
+        
+        result = send_push_notification_to_all(title, body, url)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Notification sent to {result["success_count"]} subscribers',
+            'success_count': result['success_count'],
+            'error_count': result['error_count']
+        })
+    
+    context = {
+        'subscription_count': subscription_count,
+    }
+    return render(request, 'admin/test_push.html', context)
