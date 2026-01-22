@@ -197,12 +197,33 @@ SESSION_COOKIE_AGE = 3600  # 1 hour session timeout
 SESSION_COOKIE_NAME = 'jem_sessionid'  # Custom session cookie name
 
 # CSRF security
-CSRF_COOKIE_HTTPONLY = True  # Prevent JavaScript access to CSRF cookie
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access for AJAX requests
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_FAILURE_VIEW = 'core.views.csrf_failure'  # Custom CSRF failure view
-CSRF_TRUSTED_ORIGINS = []  # Add trusted origins for CSRF if needed
-if not DEBUG:
-    CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else []
+# CSRF_USE_SESSIONS = True  # Uncomment if cookie-based CSRF continues to fail
+
+# CSRF Trusted Origins - required for Django 4.0+
+# In development, allow localhost
+# In production, use environment variable or default to your domain
+if DEBUG:
+    # Development: allow localhost and 127.0.0.1
+    CSRF_TRUSTED_ORIGINS = [
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://localhost',
+        'http://127.0.0.1',
+    ]
+else:
+    # Production: get from environment or use default
+    env_origins = os.getenv('CSRF_TRUSTED_ORIGINS', '').strip()
+    if env_origins:
+        CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in env_origins.split(',') if origin.strip()]
+    else:
+        # Default trusted origins for GoDaddy production
+        CSRF_TRUSTED_ORIGINS = [
+            'https://jem.rixsoft.org',
+            'https://www.jem.rixsoft.org',
+        ]
 
 # Password security
 AUTH_PASSWORD_VALIDATORS = [
@@ -315,11 +336,11 @@ PWA_APP_SCREENSHOTS = [
 PWA_APP_OFFLINE_URL = '/offline/'
 
 # Push Notifications (VAPID Keys)
-# Generate these keys using: python -m pywebpush generate_vapid_key
-# Or use: web-push generate-vapid-keys
+# Generate these keys using: python generate_vapid_keys.py
 # Store these securely - never commit private key to version control
-VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg_HV4PNhpBQbZMoRL2YvNYLwi04ixHAU_FfahS81JH7uhRANCAAT1ucKkEamDYixn4-jKkzTunKAM0YtyzSmmmhkpg7ULw0nzR1kY00BdqQ9aBNJ7APfueOMyUm9rFQDldZQcrfw0')
-VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '9bnCpBGpg2IsZ-PoypM07pygDNGLcs0pppoZKYO1C8NJ80dZGNNAXakPWgTSewD37njjMlJvaxUA5XWUHK38NA')
+# For local development, keys are set below. For production, use environment variables.
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', 'BEh1VJaAFZQ6B7Y_9ugjRl3nDNexDSEgpBDy0gkvINZssO7RoYh1K9AN4sauxBDl8MAuNzMlN7tk90UtyJUyOrY')
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgwuUC8e9WXMVKKx8IesQfBLHtQKh4WrA1IZPbiCakEvWhRANCAARIdVSWgBWUOge2P/boI0Zd5wzXsQ0hIKQQ8tIJLyDWbLDu0aGIdSvQDeLGrsQQ5fDALjczJTe7ZPdFLciVMjq2')
 VAPID_CLAIMS = {
-    "sub": "shemmaricketts@gmail.com"  # Change to your contact email
+    "sub": "mailto:shemmaricketts@gmail.com"  # Must be mailto: format
 }

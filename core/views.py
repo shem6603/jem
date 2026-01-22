@@ -694,6 +694,8 @@ def clear_bundle_session(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@csrf_exempt
+@require_http_methods(["POST"])
 def push_subscribe(request):
     """Register a push notification subscription"""
     import json
