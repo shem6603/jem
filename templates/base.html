@@ -4,16 +4,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="J.E.M - Just Eat More. Premium snack bundles for kids in Jamaica. Perfect for lunch boxes, after-school treats, and class parties.">
     <meta name="keywords" content="snacks, juice, kids, lunch box, Jamaica, bundle, school snacks">
     <meta name="theme-color" content="#F97316">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="J.E.M">
     <title>{% block title %}J.E.M - Just Eat More{% endblock %}</title>
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{% static 'favicons/favicon.png' %}">
+    <link rel="icon" href="{% static 'favicons/favicon.ico' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicons/icon-180.png' %}">
     <link rel="apple-touch-icon" href="{% static 'favicons/icon-192.png' %}">
     <link rel="apple-touch-icon" sizes="192x192" href="{% static 'favicons/icon-192.png' %}">
     <link rel="apple-touch-icon" sizes="512x512" href="{% static 'favicons/icon-512.png' %}">
@@ -67,6 +70,34 @@
         .navbar-scrolled .logo-text {
             color: #111827 !important;
         }
+        
+        /* Custom Modal Animations */
+        #modal-content {
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        
+        #modal-content.scale-100 {
+            transform: scale(1);
+        }
+        
+        #modal-content.scale-95 {
+            transform: scale(0.95);
+        }
+        
+        #modal-content.opacity-100 {
+            opacity: 1;
+        }
+        
+        #modal-content.opacity-0 {
+            opacity: 0;
+        }
+
+        /* iOS: prevent input focus zoom (ensure >= 16px font) */
+        @media (max-width: 640px) {
+            input, select, textarea {
+                font-size: 16px;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -90,6 +121,12 @@
                     </a>
                     <a href="{% url 'core:home' %}#how-it-works" class="nav-link text-gray-700 hover:text-orange-500 font-medium transition-colors">
                         How It Works
+                    </a>
+                    <a href="{% url 'core:my_orders' %}" class="nav-link text-gray-700 hover:text-orange-500 font-medium transition-colors flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        My Orders
                     </a>
                     <a href="https://wa.me/18762030234" target="_blank" class="nav-link text-gray-700 hover:text-orange-500 font-medium transition-colors flex items-center">
                         <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
@@ -132,6 +169,12 @@
                         <a href="{% url 'core:home' %}#how-it-works" class="block px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-500 rounded-lg font-medium transition-colors">
                             How It Works
                         </a>
+                        <a href="{% url 'core:my_orders' %}" class="block px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-500 rounded-lg font-medium transition-colors flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            My Orders
+                        </a>
                         <a href="https://wa.me/18762030234" target="_blank" class="block px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-500 rounded-lg font-medium transition-colors">
                             Contact Us
                         </a>
@@ -170,7 +213,7 @@
     {% endif %}
 
     <!-- Main Content -->
-    <main>
+    <main class="pt-24 md:pt-24">
         {% block content %}{% endblock %}
     </main>
 
@@ -211,6 +254,7 @@
                         <li><a href="{% url 'core:home' %}" class="text-gray-400 hover:text-white transition-colors">Home</a></li>
                         <li><a href="{% url 'core:home' %}#products" class="text-gray-400 hover:text-white transition-colors">Our Bundles</a></li>
                         <li><a href="{% url 'core:home' %}#how-it-works" class="text-gray-400 hover:text-white transition-colors">How It Works</a></li>
+                        <li><a href="{% url 'core:my_orders' %}" class="text-gray-400 hover:text-white transition-colors">My Orders</a></li>
                         <li><a href="{% url 'core:bundle_builder' %}" class="text-gray-400 hover:text-white transition-colors">Order Now</a></li>
                     </ul>
                 </div>
@@ -268,6 +312,34 @@
         </div>
     </footer>
 
+    <!-- Custom Modal/Popup UI -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" style="background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
+            <div class="p-6">
+                <!-- Icon and Title -->
+                <div class="flex items-start gap-4 mb-4">
+                    <div id="modal-icon" class="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl">
+                        <!-- Icon will be set dynamically -->
+                    </div>
+                    <div class="flex-1">
+                        <h3 id="modal-title" class="text-xl font-bold text-gray-900 mb-2"></h3>
+                        <p id="modal-message" class="text-gray-700"></p>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex justify-end gap-3 mt-6">
+                    <button id="modal-cancel-btn" onclick="closeCustomModal()" class="hidden px-6 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition">
+                        Cancel
+                    </button>
+                    <button id="modal-ok-btn" onclick="closeCustomModal()" class="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-red-600 transition shadow-lg">
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Floating WhatsApp Button -->
     <a href="https://wa.me/18762030234" target="_blank" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 w-14 h-14 md:w-16 md:h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 hover:scale-110 transition-all duration-300 safe-area-inset-bottom safe-area-inset-right" style="margin-bottom: env(safe-area-inset-bottom, 0); margin-right: env(safe-area-inset-right, 0);">
         <svg class="w-7 h-7 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -307,6 +379,120 @@
                 setTimeout(() => alert.remove(), 300);
             });
         }, 5000);
+        
+        // Custom Modal Functions
+        function showCustomModal(message, type = 'info', title = null, onConfirm = null, showCancel = false) {
+            const modal = document.getElementById('custom-modal');
+            const modalContent = document.getElementById('modal-content');
+            const modalIcon = document.getElementById('modal-icon');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            const modalOkBtn = document.getElementById('modal-ok-btn');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
+            
+            // Set message
+            modalMessage.textContent = message;
+            
+            // Set title based on type if not provided
+            if (!title) {
+                switch(type) {
+                    case 'error':
+                        title = 'Error';
+                        break;
+                    case 'warning':
+                        title = 'Warning';
+                        break;
+                    case 'success':
+                        title = 'Success';
+                        break;
+                    default:
+                        title = 'Information';
+                }
+            }
+            modalTitle.textContent = title;
+            
+            // Set icon and colors based on type
+            modalIcon.className = 'flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl';
+            let iconEmoji = 'ℹ️';
+            
+            switch(type) {
+                case 'error':
+                    modalIcon.classList.add('bg-red-100');
+                    iconEmoji = '❌';
+                    modalOkBtn.className = 'px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:from-red-600 hover:to-red-700 transition shadow-lg';
+                    break;
+                case 'warning':
+                    modalIcon.classList.add('bg-yellow-100');
+                    iconEmoji = '⚠️';
+                    modalOkBtn.className = 'px-6 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold rounded-lg hover:from-yellow-600 hover:to-orange-600 transition shadow-lg';
+                    break;
+                case 'success':
+                    modalIcon.classList.add('bg-green-100');
+                    iconEmoji = '✅';
+                    modalOkBtn.className = 'px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:from-green-600 hover:to-emerald-600 transition shadow-lg';
+                    break;
+                default:
+                    modalIcon.classList.add('bg-blue-100');
+                    iconEmoji = 'ℹ️';
+                    modalOkBtn.className = 'px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-indigo-600 transition shadow-lg';
+            }
+            
+            modalIcon.textContent = iconEmoji;
+            
+            // Show/hide cancel button
+            if (showCancel) {
+                modalCancelBtn.classList.remove('hidden');
+                if (onConfirm) {
+                    modalOkBtn.onclick = function() {
+                        closeCustomModal();
+                        if (onConfirm) onConfirm();
+                    };
+                }
+            } else {
+                modalCancelBtn.classList.add('hidden');
+                modalOkBtn.onclick = closeCustomModal;
+            }
+            
+            // Show modal with animation
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            
+            // Close on backdrop click
+            modal.onclick = function(e) {
+                if (e.target === modal) {
+                    closeCustomModal();
+                }
+            };
+            
+            // Close on Escape key
+            const escapeHandler = function(e) {
+                if (e.key === 'Escape') {
+                    closeCustomModal();
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        }
+        
+        function closeCustomModal() {
+            const modal = document.getElementById('custom-modal');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+        
+        // Replace default alert with custom modal
+        window.alert = function(message) {
+            showCustomModal(message, 'info', 'Alert');
+        };
     </script>
     {% block extra_js %}{% endblock %}
     

@@ -13,22 +13,36 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+        /* Custom scrollbar styling for sidebar */
+        nav::-webkit-scrollbar {
+            width: 6px;
+        }
+        nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        nav::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.5);
+            border-radius: 3px;
+        }
+        nav::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(156, 163, 175, 0.7);
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="flex h-screen overflow-hidden">
         <!-- Sidebar Navigation -->
-        <aside class="hidden md:flex md:flex-col md:w-64 bg-gray-900 text-white shadow-lg">
+        <aside class="hidden md:flex md:flex-col md:w-64 bg-gray-900 text-white shadow-lg h-screen">
             <!-- Logo/Brand -->
-            <div class="flex items-center justify-center h-16 px-4 border-b border-gray-800">
+            <div class="flex items-center justify-center h-16 px-4 border-b border-gray-800 flex-shrink-0">
                 <a href="{% url 'admin_dashboard' %}" class="flex items-center space-x-2">
                     <span class="text-xl font-bold">🔐 Admin Panel</span>
                 </a>
             </div>
             
             <!-- Navigation Links -->
-            <nav class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+            <nav class="flex-1 px-4 py-4 space-y-2 overflow-y-auto overflow-x-hidden" style="scrollbar-width: thin; scrollbar-color: rgba(156, 163, 175, 0.5) transparent;">
                 <a href="{% url 'admin_dashboard' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_dashboard' %}bg-gray-800{% endif %}">
                     <span class="mr-3">📊</span>
                     <span>Dashboard</span>

@@ -279,6 +279,7 @@ class CustomerOrder(models.Model):
     approved_at = models.DateTimeField(blank=True, null=True)
     approved_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_orders')
     payment_deadline = models.DateTimeField(null=True, blank=True, help_text="24-hour deadline for payment after approval")
+    payment_reminder_sent = models.BooleanField(default=False, help_text="Whether payment reminder email has been sent")
     
     class Meta:
         ordering = ['-created_at']

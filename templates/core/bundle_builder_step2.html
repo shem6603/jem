@@ -292,7 +292,11 @@
         const checked = document.querySelectorAll('.snack-checkbox:checked').length;
         if (checked !== requiredCount) {
             e.preventDefault();
-            alert(`Please select exactly ${requiredCount} snacks. You selected ${checked}.`);
+            if (typeof showCustomModal === 'function') {
+                showCustomModal(`Please select exactly ${requiredCount} snacks. You selected ${checked}.`, 'warning', 'Selection Required');
+            } else {
+                alert(`Please select exactly ${requiredCount} snacks. You selected ${checked}.`);
+            }
         }
     });
     

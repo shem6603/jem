@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Orders - J.E.M{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-black text-gray-900 mb-2">
+                My Orders
+            </h1>
+            <p class="text-lg text-gray-600">
+                View your orders by entering your phone number or order reference
+            </p>
+        </div>
+        
+        <!-- Search Form -->
+        {% if not phone_verified %}
+        <div class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+            <form method="POST" class="space-y-6">
+                {% csrf_token %}
+                
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div class="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div class="relative flex justify-center text-sm">
+                        <span class="px-2 bg-white text-gray-500">OR</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="order_ref" class="block text-sm font-medium text-gray-700 mb-2">
+                        Order Reference
+                    </label>
+                    <input 
+                        type="text" 
+                        id="order_ref" 
+                        name="order_ref" 
+                        placeholder="e.g., JEM-ABC123"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg uppercase"
+                        pattern="JEM-[A-Z0-9]{6}"
+                        title="Order reference format: JEM-XXXXXX"
+                    >
+                    <p class="mt-2 text-sm text-gray-500">
+                        Enter your order reference number (e.g., JEM-ABC123)
+                    </p>
+                </div>
+                
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div class="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div class="relative flex justify-center text-sm">
+                        <span class="px-2 bg-white text-gray-500">OR</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
+                        Phone Number
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="phone" 
+                        name="phone" 
+                        placeholder="e.g., 18762030234"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg"
+                    >
+                    <p class="mt-2 text-sm text-gray-500">
+                        Enter the phone number you used when placing your orders
+                    </p>
+                </div>
+                
+                <p class="text-xs text-gray-400 text-center">
+                    You can search by either order reference or phone number (or both for verification)
+                </p>
+                
+                <button 
+                    type="submit"
+                    class="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition"
+                >
+                    Search Orders
+                </button>
+            </form>
+        </div>
+        {% endif %}
+        
+        <!-- Orders List -->
+        {% if phone_verified %}
+        <div class="space-y-4">
+            {% if orders %}
+                {% for order in orders %}
+                <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <div class="p-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900 mb-1">
+                                    Order {{ order.order_reference }}
+                                </h3>
+                                <p class="text-sm text-gray-600">
+                                    {{ order.created_at|date:"F d, Y g:i A" }}
+                                </p>
+                            </div>
+                            <div class="mt-2 md:mt-0">
+                                {% if order.status == 'pending_approval' %}
+                                <span class="inline-block px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold">
+                                    ⏳ Pending Approval
+                                </span>
+                                {% elif order.status == 'approved' %}
+                                <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                                    ✅ Approved
+                                </span>
+                                {% elif order.status == 'payment_uploaded' %}
+                                <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold">
+                                    💳 Payment Uploaded
+                                </span>
+                                {% elif order.status == 'payment_verified' %}
+                                <span class="inline-block px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-semibold">
+                                    ✓ Payment Verified
+                                </span>
+                                {% elif order.status == 'processing' %}
+                                <span class="inline-block px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-semibold">
+                                    📦 Processing
+                                </span>
+                                {% elif order.status == 'completed' %}
+                                <span class="inline-block px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+                                    🎉 Completed
+                                </span>
+                                {% elif order.status == 'cancelled' %}
+                                <span class="inline-block px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold">
+                                    ❌ Cancelled
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="grid md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <p class="text-sm text-gray-600">Bundle Type</p>
+                                <p class="font-semibold text-gray-900">{{ order.get_bundle_type_display }}</p>
+                            </div>
+                            {% if order.can_show_price %}
+                            <div>
+                                <p class="text-sm text-gray-600">Total Amount</p>
+                                <p class="font-bold text-green-600 text-lg">${{ order.total_revenue|floatformat:0 }} JMD</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        {% if order.status == 'approved' %}
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <a href="{% url 'core:order_payment' order_ref=order.order_reference %}" 
+                               class="px-6 py-2 bg-green-500 text-white font-semibold rounded-lg text-center hover:bg-green-600 transition">
+                                Make Payment
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="bg-white rounded-2xl shadow-lg p-8 text-center">
+                <p class="text-gray-600 text-lg">
+                    {% if search_type == 'order_ref' %}
+                    No orders found for this order reference.
+                    {% else %}
+                    No orders found for this phone number.
+                    {% endif %}
+                </p>
+                <a href="{% url 'core:home' %}" class="mt-4 inline-block px-6 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition">
+                    Place New Order
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Back to Home -->
+        <div class="mt-8 text-center">
+            <a href="{% url 'core:home' %}" class="text-orange-600 hover:text-orange-700 font-medium">
+                ← Back to Home
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-format order reference with hyphen
+    document.addEventListener('DOMContentLoaded', function() {
+        const orderRefInput = document.getElementById('order_ref');
+        if (orderRefInput) {
+            orderRefInput.addEventListener('input', function(e) {
+                let value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''); // Remove invalid chars, keep hyphen
+                
+                // Remove existing hyphens to avoid duplicates
+                value = value.replace(/-/g, '');
+                
+                // If starts with JEM and has at least 3 characters, add hyphen after JEM
+                if (value.startsWith('JEM') && value.length > 3) {
+                    value = 'JEM-' + value.substring(3);
+                }
+                
+                // Limit to JEM-XXXXXX format (max 10 chars: JEM- + 6 chars)
+                if (value.length > 10) {
+                    value = value.substring(0, 10);
+                }
+                
+                e.target.value = value;
+            });
+            
+            // Also handle paste events
+            orderRefInput.addEventListener('paste', function(e) {
+                setTimeout(() => {
+                    let value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                    value = value.replace(/-/g, '');
+                    if (value.startsWith('JEM') && value.length > 3) {
+                        value = 'JEM-' + value.substring(3);
+                    }
+                    if (value.length > 10) {
+                        value = value.substring(0, 10);
+                    }
+                    e.target.value = value;
+                }, 0);
+            });
+        }
+    });
+</script>
+{% endblock %}

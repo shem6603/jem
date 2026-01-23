@@ -282,21 +282,28 @@ def bundle_builder_select(request):
             if is_valid:
                 starred_juice_ids.append(juice_id)
         
-        # Validation: must have at least one item selected
+        # Validation: minimum selection requirements
         errors = []
         
+        # Minimum selection requirements
+        MIN_SNACKS = 5
+        MIN_JUICES = 3
+        
+        # If customer selects any items, they must meet minimum requirements
+        # If they select 0 items, that's fine (they can use random selection)
+        
         if bundle_type in ['10_snacks', '25_snacks', 'mega_mix']:
-            if len(selected_snack_ids) == 0:
-                errors.append('You must select at least one snack for your bundle.')
+            if len(selected_snack_ids) > 0 and len(selected_snack_ids) < MIN_SNACKS:
+                errors.append(f'You must select at least {MIN_SNACKS} different snacks. Currently selected: {len(selected_snack_ids)}')
         if bundle_type in ['25_juices', 'mega_mix']:
-            if len(selected_juice_ids) == 0:
-                errors.append('You must select at least one juice for your bundle.')
+            if len(selected_juice_ids) > 0 and len(selected_juice_ids) < MIN_JUICES:
+                errors.append(f'You must select at least {MIN_JUICES} different juices. Currently selected: {len(selected_juice_ids)}')
         elif bundle_type == 'custom':
             # Validate based on what customer requested
-            if custom_snack_qty > 0 and len(selected_snack_ids) == 0:
-                errors.append(f'You must select at least one snack for your {custom_snack_qty} snacks.')
-            if custom_juice_qty > 0 and len(selected_juice_ids) == 0:
-                errors.append(f'You must select at least one juice for your {custom_juice_qty} juices.')
+            if custom_snack_qty > 0 and len(selected_snack_ids) > 0 and len(selected_snack_ids) < MIN_SNACKS:
+                errors.append(f'You must select at least {MIN_SNACKS} different snacks. Currently selected: {len(selected_snack_ids)}')
+            if custom_juice_qty > 0 and len(selected_juice_ids) > 0 and len(selected_juice_ids) < MIN_JUICES:
+                errors.append(f'You must select at least {MIN_JUICES} different juices. Currently selected: {len(selected_juice_ids)}')
         
         if errors:
             for error in errors:
@@ -540,8 +547,8 @@ def bundle_builder_details(request):
                 # Validate margin is at least 38%
                 if not result['success']:
                     # Algorithm couldn't achieve target margin, set status to pending_approval
+                    # Don't show error message to customer - admin will handle it
                     order.status = 'pending_approval'
-                    messages.warning(request, result['message'])
                 
                 order.save()
             
@@ -646,6 +653,15 @@ def order_payment(request, order_ref):
             order.payment_method = payment_method
             order.status = 'payment_uploaded'
             order.save()
+            
+            # Send email notification to admin
+            try:
+                from .email_utils import send_payment_uploaded_notification
+                send_payment_uploaded_notification(order)
+            except Exception as e:
+                print(f"Error sending payment uploaded email: {e}")
+                # Don't fail the payment upload if email fails
+            
             messages.success(request, 'Payment proof uploaded successfully! We will verify and confirm your order.')
             return redirect('core:order_status', order_ref=order_ref)
         else:
@@ -659,29 +675,184 @@ def order_payment(request, order_ref):
 
 
 def order_status(request, order_ref):
-    """Order status page"""
+    """Order status page with phone verification and payment upload"""
     order = get_object_or_404(CustomerOrder, order_reference=order_ref)
+    
+    # Check if phone is verified in session for this order
+    verified_phone = request.session.get(f'verified_phone_{order_ref}')
+    
+    # If not verified, require phone verification
+    if not verified_phone:
+        if request.method == 'POST':
+            phone = request.POST.get('phone', '').strip()
+            # Normalize phone (remove spaces, dashes, etc.)
+            phone_normalized = ''.join(filter(str.isdigit, phone))
+            order_phone_normalized = ''.join(filter(str.isdigit, order.customer_phone))
+            
+            if phone_normalized == order_phone_normalized:
+                # Phone matches - store in session
+                request.session[f'verified_phone_{order_ref}'] = phone_normalized
+                verified_phone = phone_normalized
+                messages.success(request, 'Phone verified! You can now view your order.')
+            else:
+                messages.error(request, 'Phone number does not match this order. Please try again.')
+                return render(request, 'core/order_verify.html', {
+                    'order_ref': order_ref,
+                    'order': order,
+                })
+        else:
+            # Show phone verification form
+            return render(request, 'core/order_verify.html', {
+                'order_ref': order_ref,
+                'order': order,
+            })
+    
+    # Handle payment upload if status is 'approved'
+    if request.method == 'POST' and order.status == 'approved':
+        payment_proof = request.FILES.get('payment_proof')
+        payment_method = request.POST.get('payment_method', '').strip()
+        
+        if payment_proof:
+            # Validate file upload for security
+            from .security import validate_file_upload, sanitize_string, ALLOWED_DOCUMENT_EXTENSIONS, MAX_IMAGE_SIZE
+            
+            is_valid, error_msg = validate_file_upload(
+                payment_proof, 
+                allowed_extensions=ALLOWED_DOCUMENT_EXTENSIONS,
+                max_size=MAX_IMAGE_SIZE
+            )
+            
+            if not is_valid:
+                messages.error(request, f'Security validation failed: {error_msg}')
+            else:
+                # Sanitize payment method
+                payment_method = sanitize_string(payment_method, max_length=50)
+                
+                order.payment_proof = payment_proof
+                order.payment_method = payment_method
+                order.status = 'payment_uploaded'
+                order.save()
+                
+                # Send email notification to admin
+                try:
+                    from .email_utils import send_payment_uploaded_notification
+                    send_payment_uploaded_notification(order)
+                except Exception as e:
+                    print(f"Error sending payment uploaded email: {e}")
+                    # Don't fail the payment upload if email fails
+                
+                messages.success(request, 'Payment proof uploaded successfully! We will verify and confirm your order.')
+                return redirect('core:order_status', order_ref=order_ref)
+        else:
+            messages.error(request, 'Please upload your payment proof.')
+    
     order_items = order.customer_order_items.select_related('item')
+    banking_info = BankingInfo.objects.filter(is_active=True)
     
     context = {
         'order': order,
         'order_items': order_items,
+        'banking_info': banking_info,
+        'verified': True,
     }
     return render(request, 'core/order_status.html', context)
 
 
 def check_order(request):
-    """Allow customer to check their order status"""
+    """Allow customer to check their order status with phone verification"""
     if request.method == 'POST':
         order_ref = request.POST.get('order_ref', '').strip().upper()
+        phone = request.POST.get('phone', '').strip()
+        
+        if order_ref and phone:
+            try:
+                order = CustomerOrder.objects.get(order_reference=order_ref)
+                # Normalize phone numbers for comparison
+                phone_normalized = ''.join(filter(str.isdigit, phone))
+                order_phone_normalized = ''.join(filter(str.isdigit, order.customer_phone))
+                
+                if phone_normalized == order_phone_normalized:
+                    # Phone matches - store in session and redirect
+                    request.session[f'verified_phone_{order_ref}'] = phone_normalized
+                    return redirect('core:order_status', order_ref=order.order_reference)
+                else:
+                    messages.error(request, 'Phone number does not match this order. Please check and try again.')
+            except CustomerOrder.DoesNotExist:
+                messages.error(request, 'Order not found. Please check the reference number.')
+        else:
+            messages.error(request, 'Please provide both order reference and phone number.')
+    
+    return render(request, 'core/check_order.html')
+
+
+def my_orders(request):
+    """View all orders for a customer by phone number or order reference"""
+    orders = []
+    phone_verified = False
+    search_type = None
+    
+    if request.method == 'POST':
+        phone = request.POST.get('phone', '').strip()
+        order_ref = request.POST.get('order_ref', '').strip().upper()
+        
+        # Check if searching by order reference
         if order_ref:
             try:
                 order = CustomerOrder.objects.get(order_reference=order_ref)
-                return redirect('core:order_status', order_ref=order.order_reference)
+                # Verify phone matches if provided
+                if phone:
+                    phone_normalized = ''.join(filter(str.isdigit, phone))
+                    order_phone_normalized = ''.join(filter(str.isdigit, order.customer_phone))
+                    if phone_normalized == order_phone_normalized:
+                        orders = [order]
+                        phone_verified = True
+                        request.session[f'verified_phone_{order_ref}'] = phone_normalized
+                        messages.success(request, 'Order found!')
+                    else:
+                        messages.error(request, 'Phone number does not match this order.')
+                else:
+                    # If no phone provided, just show the order (but require phone verification to view details)
+                    orders = [order]
+                    phone_verified = True
+                    messages.success(request, 'Order found! Please verify your phone number to view details.')
+                    search_type = 'order_ref'
             except CustomerOrder.DoesNotExist:
-                messages.error(request, 'Order not found. Please check the reference number.')
+                messages.error(request, 'Order not found. Please check the order reference.')
+        
+        # Check if searching by phone number
+        elif phone:
+            phone_normalized = ''.join(filter(str.isdigit, phone))
+            # Find all orders with this phone number
+            all_orders = CustomerOrder.objects.filter(
+                customer_phone__icontains=phone_normalized[-10:]  # Match last 10 digits
+            ).order_by('-created_at')
+            
+            # Further filter by exact match (normalized)
+            matching_orders = []
+            for order in all_orders:
+                order_phone_normalized = ''.join(filter(str.isdigit, order.customer_phone))
+                if phone_normalized == order_phone_normalized:
+                    matching_orders.append(order)
+            
+            if matching_orders:
+                orders = matching_orders
+                phone_verified = True
+                # Store verified phone in session for all orders
+                for order in orders:
+                    request.session[f'verified_phone_{order.order_reference}'] = phone_normalized
+                messages.success(request, f'Found {len(orders)} order(s) for this phone number.')
+                search_type = 'phone'
+            else:
+                messages.error(request, 'No orders found for this phone number.')
+        else:
+            messages.error(request, 'Please enter either your phone number or order reference.')
     
-    return render(request, 'core/check_order.html')
+    context = {
+        'orders': orders,
+        'phone_verified': phone_verified,
+        'search_type': search_type,
+    }
+    return render(request, 'core/my_orders.html', context)
 
 
 # Legacy Bundle Builder views - redirect to new flow
@@ -843,7 +1014,6 @@ def submit_suggestion(request):
     """Handle customer suggestion submission"""
     import json
     from .models import CustomerSuggestion
-    from .email_utils import send_suggestion_notification
     
     try:
         data = json.loads(request.body)
@@ -876,18 +1046,7 @@ def submit_suggestion(request):
             customer_phone=customer_phone,
         )
         
-        # Send email notification to admin
-        try:
-            email_sent = send_suggestion_notification(suggestion)
-            if email_sent:
-                print(f"Suggestion email sent successfully for suggestion ID {suggestion.id}")
-            else:
-                print(f"Warning: Suggestion email failed for suggestion ID {suggestion.id}")
-        except Exception as e:
-            print(f"Error sending suggestion email: {e}")
-            import traceback
-            traceback.print_exc()
-            # Don't fail the request if email fails
+        # Note: Suggestions are only viewed in admin section, no email notifications
         
         return JsonResponse({'success': True, 'message': 'Suggestion submitted successfully'})
         

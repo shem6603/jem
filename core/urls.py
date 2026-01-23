@@ -15,6 +15,7 @@ urlpatterns = [
     path('order/payment/<str:order_ref>/', views.order_payment, name='order_payment'),
     path('order/status/<str:order_ref>/', views.order_status, name='order_status'),
     path('check-order/', views.check_order, name='check_order'),
+    path('my-orders/', views.my_orders, name='my_orders'),
     path('clear-session/', views.clear_bundle_session, name='clear_bundle_session'),
     path('offline/', views.offline, name='offline'),
     

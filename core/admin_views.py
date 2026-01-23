@@ -1406,6 +1406,25 @@ def admin_customer_orders(request):
         expired_order.save()
         messages.warning(request, f'Order {expired_order.order_reference} auto-cancelled due to expired payment deadline.')
     
+    # Check for orders 24 hours old without payment and send reminders
+    from datetime import timedelta
+    twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+    orders_needing_reminder = CustomerOrder.objects.filter(
+        created_at__lte=twenty_four_hours_ago,
+        status='approved',
+        payment_proof__isnull=True,
+        payment_reminder_sent=False
+    )
+    for order in orders_needing_reminder:
+        try:
+            from .email_utils import send_payment_reminder_notification
+            success = send_payment_reminder_notification(order)
+            if success:
+                order.payment_reminder_sent = True
+                order.save(update_fields=['payment_reminder_sent'])
+        except Exception as e:
+            print(f"Error sending payment reminder for order {order.order_reference}: {e}")
+    
     # Filter by status
     status_filter = request.GET.get('status', '')
     orders = CustomerOrder.objects.all().order_by('-created_at')
@@ -1437,7 +1456,14 @@ def admin_customer_order_detail(request, order_id):
     
     order = get_object_or_404(CustomerOrder, id=order_id)
     order_items = order.customer_order_items.select_related('item')
-    target_margin = Decimal(request.session.get('admin_margin_target', '38'))
+    # Initialize target margin: use session value, or order's current margin if >= 38%, or default to 38%
+    session_margin = request.session.get('admin_margin_target')
+    if session_margin:
+        target_margin = Decimal(session_margin)
+    elif order.profit_margin and order.profit_margin >= 38:
+        target_margin = Decimal(str(order.profit_margin))
+    else:
+        target_margin = Decimal('38')
     
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -1600,11 +1626,82 @@ def admin_customer_order_detail(request, order_id):
             messages.success(request, f'Order {order_ref} has been permanently deleted.')
             return redirect('admin_customer_orders')
         
+        elif action == 'remove_item':
+            from .views import BUNDLE_REQUIREMENTS
+            from .models import CustomerOrderItem
+            
+            # Get item ID to remove
+            item_id_to_remove = request.POST.get('item_id', '').strip()
+            
+            if not item_id_to_remove:
+                messages.error(request, 'Item ID is required to remove an item.')
+            else:
+                try:
+                    order_item = order.customer_order_items.get(id=item_id_to_remove)
+                    item_name = order_item.item.name
+                    
+                    # Remove the item
+                    order_item.delete()
+                    
+                    # Recalculate totals
+                    order.total_cost = sum(
+                        oi.item.cost_price * Decimal(str(oi.quantity))
+                        for oi in order.customer_order_items.select_related('item')
+                    )
+                    
+                    # Validate bundle requirements (for fixed bundles)
+                    if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                        requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                        required_snacks = requirements.get('snacks', 0)
+                        required_juices = requirements.get('juices', 0)
+                        
+                        # Calculate current totals
+                        current_snacks = sum(
+                            oi.quantity for oi in order.customer_order_items.select_related('item')
+                            if oi.item.category == 'snack'
+                        )
+                        current_juices = sum(
+                            oi.quantity for oi in order.customer_order_items.select_related('item')
+                            if oi.item.category == 'juice'
+                        )
+                        
+                        # Validate totals
+                        bundle_warnings = []
+                        if required_snacks > 0 and current_snacks != required_snacks:
+                            bundle_warnings.append(f'Total snacks must equal {required_snacks}. Current: {current_snacks}')
+                        if required_juices > 0 and current_juices != required_juices:
+                            bundle_warnings.append(f'Total juices must equal {required_juices}. Current: {current_juices}')
+                        
+                        if bundle_warnings:
+                            for warning in bundle_warnings:
+                                messages.warning(request, warning)
+                    
+                    # Validate 38% margin if revenue is set
+                    if order.total_revenue > 0:
+                        order.net_profit = order.total_revenue - order.total_cost
+                        if order.total_revenue > 0:
+                            order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                            if order.profit_margin < 38:
+                                min_price = order.total_cost / Decimal('0.62')
+                                messages.warning(request, f'Current revenue results in {order.profit_margin:.1f}% margin. Minimum price for 38% margin is ${min_price:.0f} JMD.')
+                    
+                    order.save()
+                    messages.success(request, f'Item "{item_name}" removed from order.')
+                    
+                    # Refresh order items for display
+                    order_items = order.customer_order_items.select_related('item')
+                    
+                except CustomerOrderItem.DoesNotExist:
+                    messages.error(request, 'Item not found in this order.')
+                except Exception as e:
+                    messages.error(request, f'Error removing item: {str(e)}')
+        
         elif action == 'update_items':
             from .views import BUNDLE_REQUIREMENTS
             
             # Update item quantities with security validation
             from .security import validate_integer
+            errors = []
             
             for item in order_items:
                 qty_key = f'qty_{item.id}'
@@ -1623,11 +1720,6 @@ def admin_customer_order_detail(request, order_id):
                     # Use validated integer value directly (already validated above)
                     item.quantity = qty_value
                     item.save()
-                    try:
-                        item.quantity = int(new_qty)
-                        item.save()
-                    except ValueError:
-                        pass
             
             # Validate totals match bundle requirements (for fixed bundles)
             if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
@@ -1703,6 +1795,168 @@ def admin_customer_order_detail(request, order_id):
             
             order.save()
             messages.success(request, 'Item quantities updated.')
+        
+        elif action == 'add_items':
+            from .views import BUNDLE_REQUIREMENTS
+            from .models import Item, CustomerOrderItem
+            from .security import validate_integer
+            
+            # Check if this is a "selected" order (customer selected specific items)
+            has_starred_items = order.customer_order_items.filter(is_starred=True).exists()
+            existing_item_ids = set(order.customer_order_items.values_list('item_id', flat=True))
+            
+            # Get items to add
+            item_ids_to_add = request.POST.getlist('add_item_id')
+            quantities_to_add = {}
+            errors = []
+            
+            # Validate and collect quantities for each item
+            for item_id_str in item_ids_to_add:
+                try:
+                    item_id = int(item_id_str)
+                    qty_key = f'add_qty_{item_id}'
+                    qty_str = request.POST.get(qty_key, '').strip()
+                    
+                    if not qty_str:
+                        continue
+                    
+                    # Validate quantity
+                    qty_valid, qty_value, qty_error = validate_integer(
+                        qty_str,
+                        min_value=1,
+                        max_value=10000,
+                        allow_zero=False
+                    )
+                    
+                    if not qty_valid:
+                        errors.append(f'Invalid quantity for item ID {item_id}: {qty_error}')
+                        continue
+                    
+                    # Check if item exists and has stock
+                    try:
+                        item = Item.objects.get(id=item_id, current_stock__gt=0)
+                        
+                        # For selected orders, only allow adding items that customer already selected
+                        if has_starred_items:
+                            if item_id not in existing_item_ids:
+                                errors.append(f'{item.name}: This is a selected order. You can only add items that the customer selected. "{item.name}" is not in the customer\'s selection.')
+                                continue
+                        
+                        # Validate category restriction for juice-only or snacks-only bundles
+                        if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                            requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                            required_snacks = requirements.get('snacks', 0)
+                            required_juices = requirements.get('juices', 0)
+                            
+                            # Check if bundle is snacks-only (snacks required, no juices)
+                            if required_snacks > 0 and required_juices == 0:
+                                if item.category != 'snack':
+                                    errors.append(f'{item.name}: This bundle requires snacks only. Cannot add {item.category} items.')
+                                    continue
+                            
+                            # Check if bundle is juices-only (juices required, no snacks)
+                            elif required_juices > 0 and required_snacks == 0:
+                                if item.category != 'juice':
+                                    errors.append(f'{item.name}: This bundle requires juices only. Cannot add {item.category} items.')
+                                    continue
+                        
+                        if qty_value > item.current_stock:
+                            errors.append(f'{item.name}: Only {item.current_stock} units available, requested {qty_value}')
+                            continue
+                        
+                        # Check if item already in order
+                        existing_order_item = order.customer_order_items.filter(item_id=item_id).first()
+                        if existing_order_item:
+                            # Update existing item quantity instead of creating new
+                            new_total_qty = existing_order_item.quantity + qty_value
+                            if new_total_qty > item.current_stock:
+                                errors.append(f'{item.name}: Total quantity ({new_total_qty}) exceeds available stock ({item.current_stock})')
+                                continue
+                            quantities_to_add[item_id] = {'item': item, 'quantity': qty_value, 'existing': existing_order_item}
+                        else:
+                            quantities_to_add[item_id] = {'item': item, 'quantity': qty_value, 'existing': None}
+                    except Item.DoesNotExist:
+                        errors.append(f'Item ID {item_id} not found or out of stock')
+                        continue
+                except ValueError:
+                    errors.append(f'Invalid item ID: {item_id_str}')
+                    continue
+            
+            if errors:
+                for error in errors:
+                    messages.error(request, error)
+            elif not quantities_to_add:
+                messages.warning(request, 'No valid items selected to add.')
+            else:
+                # Add items to order
+                added_items = []
+                for item_id, item_data in quantities_to_add.items():
+                    item = item_data['item']
+                    qty = item_data['quantity']
+                    existing = item_data['existing']
+                    
+                    if existing:
+                        # Update existing order item
+                        existing.quantity += qty
+                        existing.save()
+                        added_items.append(f"{item.name} (+{qty})")
+                    else:
+                        # Create new order item
+                        CustomerOrderItem.objects.create(
+                            order=order,
+                            item=item,
+                            quantity=qty,
+                            is_starred=False
+                        )
+                        added_items.append(f"{item.name} ({qty})")
+                
+                # Recalculate totals
+                order.total_cost = sum(
+                    oi.item.cost_price * Decimal(str(oi.quantity))
+                    for oi in order.customer_order_items.select_related('item')
+                )
+                
+                # Validate bundle requirements (for fixed bundles)
+                if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                    requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                    required_snacks = requirements.get('snacks', 0)
+                    required_juices = requirements.get('juices', 0)
+                    
+                    # Calculate current totals
+                    current_snacks = sum(
+                        oi.quantity for oi in order.customer_order_items.select_related('item')
+                        if oi.item.category == 'snack'
+                    )
+                    current_juices = sum(
+                        oi.quantity for oi in order.customer_order_items.select_related('item')
+                        if oi.item.category == 'juice'
+                    )
+                    
+                    # Validate totals
+                    bundle_errors = []
+                    if required_snacks > 0 and current_snacks != required_snacks:
+                        bundle_errors.append(f'Total snacks must equal {required_snacks}. Current: {current_snacks}')
+                    if required_juices > 0 and current_juices != required_juices:
+                        bundle_errors.append(f'Total juices must equal {required_juices}. Current: {current_juices}')
+                    
+                    if bundle_errors:
+                        for error in bundle_errors:
+                            messages.warning(request, error)
+                
+                # Validate 38% margin if revenue is set
+                if order.total_revenue > 0:
+                    order.net_profit = order.total_revenue - order.total_cost
+                    if order.total_revenue > 0:
+                        order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                        if order.profit_margin < 38:
+                            min_price = order.total_cost / Decimal('0.62')
+                            messages.warning(request, f'Current revenue results in {order.profit_margin:.1f}% margin. Minimum price for 38% margin is ${min_price:.0f} JMD.')
+                
+                order.save()
+                messages.success(request, f'Items added: {", ".join(added_items)}')
+                
+                # Refresh order items for display
+                order_items = order.customer_order_items.select_related('item')
 
         elif action == 'rerun_algo':
             # Re-run algorithm using the new generate_smart_bundle function
@@ -1710,14 +1964,17 @@ def admin_customer_order_detail(request, order_id):
             from .models import Item
             from .views import BUNDLE_REQUIREMENTS
             
+            # Get target margin from admin input (allow any value, no minimum restriction)
             try:
                 margin_input = Decimal(request.POST.get('target_margin', '38').strip())
             except Exception:
                 margin_input = Decimal('38')
 
-            if margin_input < 38:
-                margin_input = Decimal('38')
+            # Allow admin to set any margin value for the current order (no minimum)
+            if margin_input < 0:
+                margin_input = Decimal('0')
             target_margin = margin_input
+            # Store in session for this order (admin can override customer's margin)
             request.session['admin_margin_target'] = str(margin_input)
 
             # Get customer favorites (starred items)
@@ -1752,45 +2009,75 @@ def admin_customer_order_detail(request, order_id):
                 'packaging_cost': Decimal('0'),
             }
             
-            # Run the smart bundle algorithm (no excluded items in admin context)
-            result = generate_smart_bundle(bundle_config, customer_favorites, excluded_item_ids=None)
+            # Check if this is a selected order (customer selected specific items)
+            has_starred_items = order.customer_order_items.filter(is_starred=True).exists()
             
-            # Clear existing order items and create new ones based on result
-            order.customer_order_items.all().delete()
+            # Convert margin percentage to decimal (e.g., 10% -> 0.10)
+            margin_as_decimal = margin_input / Decimal('100')
             
-            # Create new order items from snacks
-            for item, quantity, is_favorite in result['selected_snacks']:
-                CustomerOrderItem.objects.create(
-                    order=order,
-                    item=item,
-                    quantity=quantity,
-                    is_starred=is_favorite
+            if has_starred_items:
+                # Selected order: only use items already in the order
+                allowed_item_ids = list(order.customer_order_items.values_list('item_id', flat=True))
+                result = generate_smart_bundle(
+                    bundle_config, 
+                    customer_favorites, 
+                    excluded_item_ids=None,
+                    target_margin=margin_as_decimal,
+                    allowed_item_ids=allowed_item_ids,
+                    ignore_stock=True
+                )
+            else:
+                # Random order: allow any items
+                result = generate_smart_bundle(
+                    bundle_config, 
+                    customer_favorites, 
+                    excluded_item_ids=None,
+                    target_margin=margin_as_decimal,
+                    allowed_item_ids=None,
+                    ignore_stock=True
                 )
             
-            # Create new order items from juices
-            for item, quantity, is_favorite in result['selected_juices']:
-                CustomerOrderItem.objects.create(
-                    order=order,
-                    item=item,
-                    quantity=quantity,
-                    is_starred=is_favorite
-                )
-            
-            # Update order totals
-            order.total_cost = result['total_cost']
-            order.net_profit = result['estimated_profit']
-            order.profit_margin = result['profit_margin']
+            # Check if algorithm succeeded before clearing items
+            if not result['success'] and not result['selected_snacks'] and not result['selected_juices']:
+                # Algorithm completely failed - don't delete existing items
+                messages.error(request, result['message'])
+            else:
+                # Clear existing order items and create new ones based on result
+                order.customer_order_items.all().delete()
+                
+                # Create new order items from snacks
+                for item, quantity, is_favorite in result['selected_snacks']:
+                    CustomerOrderItem.objects.create(
+                        order=order,
+                        item=item,
+                        quantity=quantity,
+                        is_starred=is_favorite
+                    )
+                
+                # Create new order items from juices
+                for item, quantity, is_favorite in result['selected_juices']:
+                    CustomerOrderItem.objects.create(
+                        order=order,
+                        item=item,
+                        quantity=quantity,
+                        is_starred=is_favorite
+                    )
+                
+                # Update order totals
+                order.total_cost = result['total_cost']
+                order.net_profit = result['estimated_profit']
+                order.profit_margin = result['profit_margin']
+                
+                order.save()
+
+                # Show result message
+                if result['success']:
+                    messages.success(request, f'Algorithm re-run successfully! {result["message"]} Snacks: {result["snack_count"]}, Juices: {result["juice_count"]}')
+                else:
+                    messages.warning(request, result['message'])
             
             # Refresh order_items for the template
             order_items = order.customer_order_items.select_related('item')
-            
-            order.save()
-
-            # Show result message
-            if result['success']:
-                messages.success(request, f'Algorithm re-run successfully! {result["message"]} Snacks: {result["snack_count"]}, Juices: {result["juice_count"]}')
-            else:
-                messages.warning(request, result['message'])
     
     # Calculate suggested price for custom bundles (target margin)
     suggested_price = None
@@ -1812,6 +2099,41 @@ def admin_customer_order_detail(request, order_id):
     if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
         bundle_requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
     
+    # Get available items for adding
+    from .models import Item
+    existing_item_ids = set(order.customer_order_items.values_list('item_id', flat=True))
+    
+    # Check if this is a "selected" order (customer selected specific items)
+    # If order has starred items, it means customer selected specific items
+    has_starred_items = order.customer_order_items.filter(is_starred=True).exists()
+    
+    if has_starred_items:
+        # Selected order: only allow adding items that customer already selected (items already in order)
+        # Admin can add more quantity of customer's selected items, but not new items
+        available_items = Item.objects.filter(
+            id__in=existing_item_ids,
+            current_stock__gt=0
+        ).order_by('category', 'name')
+    else:
+        # Random/algorithm order: allow adding any available items (excluding those already in order)
+        available_items = Item.objects.filter(current_stock__gt=0).exclude(id__in=existing_item_ids).order_by('category', 'name')
+    
+    # Filter by bundle requirements: if juice-only or snacks-only, only show allowed category
+    available_snacks = available_items.filter(category='snack')
+    available_juices = available_items.filter(category='juice')
+    
+    if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+        requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+        required_snacks = requirements.get('snacks', 0)
+        required_juices = requirements.get('juices', 0)
+        
+        # If snacks-only bundle, only show snacks
+        if required_snacks > 0 and required_juices == 0:
+            available_juices = available_juices.none()  # Empty queryset
+        # If juices-only bundle, only show juices
+        elif required_juices > 0 and required_snacks == 0:
+            available_snacks = available_snacks.none()  # Empty queryset
+    
     context = {
         'order': order,
         'order_items': order_items,
@@ -1820,6 +2142,9 @@ def admin_customer_order_detail(request, order_id):
         'suggested_margin': suggested_margin,
         'target_margin': target_margin,
         'bundle_requirements': bundle_requirements,
+        'available_snacks': available_snacks,
+        'available_juices': available_juices,
+        'is_selected_order': has_starred_items,  # Flag to show if this is a selected order
     }
     return render(request, 'admin/customer_order_detail.html', context)
 

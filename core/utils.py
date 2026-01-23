@@ -16,7 +16,16 @@ REGULAR_MIN_QTY = 0  # Regular items can be 0 (excluded if too expensive)
 REGULAR_MAX_QTY = 2  # Regular items limited to 2 for variety
 
 
-def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, available_juices, enforce_margin=True):
+def solve_smart_bundle(
+    bundle_config,
+    customer_favorites,
+    available_snacks,
+    available_juices,
+    enforce_margin=True,
+    target_margin=None,
+    force_non_random=False,
+    ignore_stock=False
+):
     """
     Use Linear Programming to find the optimal bundle that minimizes cost
     while meeting all constraints.
@@ -27,6 +36,9 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
         available_snacks (list): List of available snack Items
         available_juices (list): List of available juice Items
         enforce_margin (bool): Whether to enforce the profit margin constraint
+        target_margin (Decimal): Target profit margin (0-1). If None, uses MIN_PROFIT_MARGIN
+        force_non_random (bool): If True, disable variety caps even when no favorites
+        ignore_stock (bool): If True, ignore stock limits when solving
     
     Returns:
         dict: Solution with item quantities, or None if infeasible
@@ -36,11 +48,16 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     juice_limit = int(bundle_config.get('juice_limit', 0))
     packaging_cost = float(bundle_config.get('packaging_cost', 0))
     
+    # Use provided target margin or default to MIN_PROFIT_MARGIN
+    margin_to_use = float(target_margin) if target_margin is not None else float(MIN_PROFIT_MARGIN)
+    
     # Get favorite IDs for quick lookup
     favorite_ids = set(item.id for item in customer_favorites)
     
     # Detect if this is a random selection (no favorites = variety mode)
     is_random_selection = len(favorite_ids) == 0
+    if force_non_random:
+        is_random_selection = False
     
     # Create the LP problem - we want to MINIMIZE total cost
     prob = LpProblem("SmartBundle", LpMinimize)
@@ -64,11 +81,12 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     total_snack_stock = sum(item.current_stock for item in available_snacks) if available_snacks else 0
     total_juice_stock = sum(item.current_stock for item in available_juices) if available_juices else 0
     
-    # Early exit: if total stock is insufficient
-    if snack_limit > total_snack_stock:
-        return None
-    if juice_limit > total_juice_stock:
-        return None
+    # Early exit: if total stock is insufficient (unless ignoring stock)
+    if not ignore_stock:
+        if snack_limit > total_snack_stock:
+            return None
+        if juice_limit > total_juice_stock:
+            return None
     
     # Dynamic max for snacks: ensure we can fill snack_limit
     # Calculate ceiling of (snack_limit / num_items) + generous buffer
@@ -86,7 +104,7 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     # Create variables for snacks
     for item in available_snacks:
         is_favorite = item.id in favorite_ids
-        stock_limit = item.current_stock
+        stock_limit = item.current_stock if not ignore_stock else snack_limit
         
         if is_favorite:
             # Starred: must include at least 1, up to dynamic max (capped by stock)
@@ -113,7 +131,7 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     # Create variables for juices
     for item in available_juices:
         is_favorite = item.id in favorite_ids
-        stock_limit = item.current_stock
+        stock_limit = item.current_stock if not ignore_stock else juice_limit
         
         if is_favorite:
             # Starred: must include at least 1, up to dynamic max (capped by stock)
@@ -145,7 +163,7 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     # OBJECTIVE: Minimize Total Cost (with preference for favorites and variety)
     # ========================================
     # Detect if this is a random selection (no favorites = variety mode)
-    is_random_selection = len(favorite_ids) == 0
+    # (already computed above, kept for clarity)
     
     # Add a small penalty for non-favorites to encourage more favorites
     # This ensures favorites get more quantity when costs are similar
@@ -200,8 +218,8 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     
     # Constraint 3: Profit Margin (The Balance Enforcer)
     if enforce_margin and selling_price > 0:
-        # max_allowed_cost = selling_price * (1 - 0.38) - packaging_cost
-        max_allowed_cost = selling_price * (1 - float(MIN_PROFIT_MARGIN)) - packaging_cost
+        # max_allowed_cost = selling_price * (1 - margin) - packaging_cost
+        max_allowed_cost = selling_price * (1 - margin_to_use) - packaging_cost
         
         total_cost_expr = lpSum([
             float(snack_lookup[item_id].cost_price) * snack_vars[item_id]
@@ -285,7 +303,14 @@ def solve_smart_bundle(bundle_config, customer_favorites, available_snacks, avai
     }
 
 
-def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_ids=None):
+def generate_smart_bundle(
+    bundle_config,
+    customer_favorites=None,
+    excluded_item_ids=None,
+    target_margin=None,
+    allowed_item_ids=None,
+    ignore_stock=False
+):
     """
     Generate a smart bundle using Linear Programming optimization.
     Mathematically guarantees the minimum cost while meeting all constraints.
@@ -300,6 +325,9 @@ def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_
         
         customer_favorites (QuerySet/List): Item objects the customer specifically requested
         excluded_item_ids (list): List of item IDs to exclude from selection
+        target_margin (Decimal): Target profit margin as decimal (e.g., 0.38 for 38%). If None, uses MIN_PROFIT_MARGIN
+        allowed_item_ids (list): If provided, ONLY these items can be used (for selected orders)
+        ignore_stock (bool): If True, ignore stock limits and allow zero-stock items
     
     Returns:
         dict: {
@@ -321,6 +349,9 @@ def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_
     juice_limit = int(bundle_config.get('juice_limit', 0))
     packaging_cost = Decimal(str(bundle_config.get('packaging_cost', 0)))
     
+    # Use provided target margin or default to MIN_PROFIT_MARGIN
+    margin_decimal = Decimal(str(target_margin)) if target_margin is not None else MIN_PROFIT_MARGIN
+    
     if customer_favorites is None:
         customer_favorites = []
     
@@ -332,15 +363,25 @@ def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_
     # ========================================
     # STEP 1: Inventory Prep
     # ========================================
-    # Fetch all items where current_stock > 0, exclude excluded items
-    all_items = Item.objects.filter(current_stock__gt=0).exclude(id__in=excluded_set)
+    if allowed_item_ids is not None:
+        # For selected orders: ONLY use items from the allowed list
+        if ignore_stock:
+            all_items = Item.objects.filter(id__in=allowed_item_ids)
+        else:
+            all_items = Item.objects.filter(id__in=allowed_item_ids, current_stock__gt=0)
+    else:
+        # Fetch all items where current_stock > 0, exclude excluded items
+        if ignore_stock:
+            all_items = Item.objects.exclude(id__in=excluded_set)
+        else:
+            all_items = Item.objects.filter(current_stock__gt=0).exclude(id__in=excluded_set)
     
     # Split into snacks and juices
     available_snacks = [item for item in all_items if item.category == 'snack']
     available_juices = [item for item in all_items if item.category == 'juice']
     
-    # Calculate max allowable cost for reference
-    max_allowable_cost = (selling_price * (1 - MIN_PROFIT_MARGIN)) - packaging_cost
+    # Calculate max allowable cost for reference (using the provided margin)
+    max_allowable_cost = (selling_price * (1 - margin_decimal)) - packaging_cost
     
     # ========================================
     # STEP 2: Solve with LP (with margin constraint)
@@ -350,7 +391,10 @@ def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_
         customer_favorites,
         available_snacks,
         available_juices,
-        enforce_margin=True
+        enforce_margin=True,
+        target_margin=margin_decimal,
+        force_non_random=allowed_item_ids is not None,
+        ignore_stock=ignore_stock
     )
     
     margin_met = True
@@ -365,7 +409,10 @@ def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_
             customer_favorites,
             available_snacks,
             available_juices,
-            enforce_margin=False
+            enforce_margin=False,
+            target_margin=margin_decimal,
+            force_non_random=allowed_item_ids is not None,
+            ignore_stock=ignore_stock
         )
         margin_met = False
     
@@ -419,14 +466,15 @@ def generate_smart_bundle(bundle_config, customer_favorites=None, excluded_item_
     snack_count = sum(s['quantity'] for s in solution['snacks'])
     juice_count = sum(j['quantity'] for j in solution['juices'])
     
-    # Check if we actually met the margin (might be slightly off due to rounding)
-    success = profit_margin >= (MIN_PROFIT_MARGIN * 100)
+    # Check if we actually met the target margin (might be slightly off due to rounding)
+    success = profit_margin >= (margin_decimal * 100)
     
     # Build result message
+    target_margin_pct = margin_decimal * 100
     if success and margin_met:
         message = f"Bundle optimized successfully with {profit_margin:.1f}% profit margin."
     elif not margin_met:
-        message = f"Warning: 38% margin impossible with selected favorites. Best achievable: {profit_margin:.1f}%. Consider adjusting favorites or pricing."
+        message = f"Warning: {target_margin_pct:.0f}% margin impossible with selected favorites. Best achievable: {profit_margin:.1f}%. Consider adjusting favorites or pricing."
     else:
         message = f"Bundle created with {profit_margin:.1f}% margin."
     
@@ -474,7 +522,30 @@ def generate_bundle_for_order(order, target_margin=38):
     # Get customer favorites (starred items)
     customer_favorites = [oi.item for oi in order_items if oi.is_starred]
     
-    # Generate smart bundle (no excluded items in this context)
-    result = generate_smart_bundle(bundle_config, customer_favorites, excluded_item_ids=None)
+    # Check if this is a selected order (has starred items)
+    has_starred_items = any(oi.is_starred for oi in order_items)
+    
+    # Convert margin percentage to decimal
+    margin_decimal = Decimal(str(target_margin)) / Decimal('100')
+    
+    if has_starred_items:
+        # Selected order: only use items already in the order
+        allowed_item_ids = list(order.customer_order_items.values_list('item_id', flat=True))
+        result = generate_smart_bundle(
+            bundle_config, 
+            customer_favorites, 
+            excluded_item_ids=None,
+            target_margin=margin_decimal,
+            allowed_item_ids=allowed_item_ids
+        )
+    else:
+        # Random order: allow any items
+        result = generate_smart_bundle(
+            bundle_config, 
+            customer_favorites, 
+            excluded_item_ids=None,
+            target_margin=margin_decimal,
+            allowed_item_ids=None
+        )
     
     return result

@@ -41,20 +41,20 @@
         
         <!-- Progress Bar (Clickable Navigation) -->
         <div class="flex items-center justify-center mb-8">
-            <div class="flex items-center space-x-4">
-                <a href="{% url 'core:bundle_builder' %}" class="flex items-center group cursor-pointer hover:opacity-80 transition">
-                    <div class="w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold group-hover:bg-green-600">✓</div>
-                    <span class="ml-2 text-green-600 group-hover:text-green-700 font-semibold">Bundle</span>
+            <div class="flex items-center flex-wrap justify-center gap-2 md:gap-4 max-w-full px-2">
+                <a href="{% url 'core:bundle_builder' %}" class="flex items-center group cursor-pointer hover:opacity-80 transition flex-shrink-0">
+                    <div class="w-9 h-9 md:w-10 md:h-10 bg-green-500 text-white rounded-full flex items-center justify-center font-bold group-hover:bg-green-600 text-sm md:text-base flex-shrink-0">✓</div>
+                    <span class="ml-2 text-green-600 group-hover:text-green-700 font-semibold text-xs md:text-sm whitespace-nowrap">Bundle</span>
                 </a>
-                <div class="w-16 h-1 bg-orange-500"></div>
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
-                    <span class="ml-2 font-semibold text-orange-600">Select Items</span>
+                <div class="w-8 md:w-16 h-1 bg-orange-500 flex-shrink-0"></div>
+                <div class="flex items-center flex-shrink-0">
+                    <div class="w-9 h-9 md:w-10 md:h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold text-sm md:text-base flex-shrink-0">2</div>
+                    <span class="ml-2 font-semibold text-orange-600 text-xs md:text-sm whitespace-nowrap">Select Items</span>
                 </div>
-                <div class="w-16 h-1 bg-gray-300"></div>
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">3</div>
-                    <span class="ml-2 text-gray-500">Details</span>
+                <div class="w-8 md:w-16 h-1 bg-gray-300 flex-shrink-0"></div>
+                <div class="flex items-center flex-shrink-0">
+                    <div class="w-9 h-9 md:w-10 md:h-10 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold text-sm md:text-base flex-shrink-0">3</div>
+                    <span class="ml-2 text-gray-500 text-xs md:text-sm whitespace-nowrap">Details</span>
                 </div>
             </div>
         </div>
@@ -82,7 +82,7 @@
             </div>
         </div>
         
-        <form method="post" id="select-form" onsubmit="return true;">
+        <form method="post" id="select-form" onsubmit="return validateMinimums();">
             {% csrf_token %}
             
             {% if show_snacks %}
@@ -98,6 +98,7 @@
                     <div class="flex items-center gap-4">
                         <span class="text-sm text-gray-600">Selected: <span id="snack-selected-count" class="font-bold text-green-600">0</span></span>
                         <span class="text-sm text-gray-600">Starred: <span id="snack-star-count" class="font-bold text-yellow-500">0</span>/2</span>
+                        <span class="text-xs text-orange-600 font-semibold">Minimum: 5</span>
                     </div>
                 </div>
                 
@@ -162,6 +163,7 @@
                     <div class="flex items-center gap-4">
                         <span class="text-sm text-gray-600">Selected: <span id="juice-selected-count" class="font-bold text-green-600">0</span></span>
                         <span class="text-sm text-gray-600">Starred: <span id="juice-star-count" class="font-bold text-yellow-500">0</span>/2</span>
+                        <span class="text-xs text-orange-600 font-semibold">Minimum: 3</span>
                     </div>
                 </div>
                 
@@ -362,7 +364,11 @@ function toggleStar(btn, itemId, category) {
     
     // Cannot star unselected items
     if (!selectCheckbox.checked) {
-        alert('You must select an item first before starring it.');
+        if (typeof showCustomModal === 'function') {
+            showCustomModal('You must select an item first before starring it.', 'warning', 'Selection Required');
+        } else {
+            alert('You must select an item first before starring it.');
+        }
         return;
     }
     
@@ -371,7 +377,11 @@ function toggleStar(btn, itemId, category) {
     const currentStarred = document.querySelectorAll(`[data-category="${category}"] .star-checkbox:checked`).length;
     
     if (!starCheckbox.checked && currentStarred >= maxStars) {
-        alert(`You can only star up to ${maxStars} ${category}s. Please unstar another item first.`);
+        if (typeof showCustomModal === 'function') {
+            showCustomModal(`You can only star up to ${maxStars} ${category}s. Please unstar another item first.`, 'warning', 'Star Limit Reached');
+        } else {
+            alert(`You can only star up to ${maxStars} ${category}s. Please unstar another item first.`);
+        }
         return;
     }
     
@@ -392,13 +402,69 @@ function updateCounts() {
     const snackStarCountEl = document.getElementById('snack-star-count');
     const juiceStarCountEl = document.getElementById('juice-star-count');
     
-    if (snackSelectedEl) snackSelectedEl.textContent = snackSelectedCount;
-    if (juiceSelectedEl) juiceSelectedEl.textContent = juiceSelectedCount;
+    // Minimum requirements
+    const MIN_SNACKS = 5;
+    const MIN_JUICES = 3;
+    
+    if (snackSelectedEl) {
+        snackSelectedEl.textContent = snackSelectedCount;
+        // Highlight if below minimum
+        if (snackSelectedCount > 0 && snackSelectedCount < MIN_SNACKS) {
+            snackSelectedEl.classList.remove('text-green-600');
+            snackSelectedEl.classList.add('text-orange-600');
+        } else if (snackSelectedCount >= MIN_SNACKS) {
+            snackSelectedEl.classList.remove('text-orange-600');
+            snackSelectedEl.classList.add('text-green-600');
+        }
+    }
+    if (juiceSelectedEl) {
+        juiceSelectedEl.textContent = juiceSelectedCount;
+        // Highlight if below minimum
+        if (juiceSelectedCount > 0 && juiceSelectedCount < MIN_JUICES) {
+            juiceSelectedEl.classList.remove('text-green-600');
+            juiceSelectedEl.classList.add('text-orange-600');
+        } else if (juiceSelectedCount >= MIN_JUICES) {
+            juiceSelectedEl.classList.remove('text-orange-600');
+            juiceSelectedEl.classList.add('text-green-600');
+        }
+    }
     if (snackStarCountEl) snackStarCountEl.textContent = snackStarCount;
     if (juiceStarCountEl) juiceStarCountEl.textContent = juiceStarCount;
     
     document.getElementById('total-selected').textContent = snackSelectedCount + juiceSelectedCount;
     document.getElementById('total-starred').textContent = snackStarCount + juiceStarCount;
+}
+
+function validateMinimums() {
+    const MIN_SNACKS = 5;
+    const MIN_JUICES = 3;
+    
+    const snackSelectedCount = document.querySelectorAll('[data-category="snack"] .select-checkbox:checked').length;
+    const juiceSelectedCount = document.querySelectorAll('[data-category="juice"] .select-checkbox:checked').length;
+    
+    const hasSnacks = document.querySelector('[data-category="snack"]') !== null;
+    const hasJuices = document.querySelector('[data-category="juice"]') !== null;
+    
+    const errors = [];
+    
+    if (hasSnacks && snackSelectedCount > 0 && snackSelectedCount < MIN_SNACKS) {
+        errors.push(`You must select at least ${MIN_SNACKS} different snacks. Currently selected: ${snackSelectedCount}`);
+    }
+    
+    if (hasJuices && juiceSelectedCount > 0 && juiceSelectedCount < MIN_JUICES) {
+        errors.push(`You must select at least ${MIN_JUICES} different juices. Currently selected: ${juiceSelectedCount}`);
+    }
+    
+    if (errors.length > 0) {
+        if (typeof showCustomModal === 'function') {
+            showCustomModal(errors.join('\n'), 'warning', 'Selection Required');
+        } else {
+            alert(errors.join('\n'));
+        }
+        return false;
+    }
+    
+    return true;
 }
 
 function toggleSuggestionForm() {

@@ -348,4 +348,5 @@ VAPID_CLAIMS = {
 # Resend Email Configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
 ADMIN_EMAIL = 'justeatmore876@gmail.com'
-FROM_EMAIL = os.getenv('FROM_EMAIL', 'orders@jem.rixsoft.org')  # Must be verified in Resend
+# Use onboarding@resend.dev for testing if your domain isn't verified
+FROM_EMAIL = os.getenv('FROM_EMAIL', 'onboarding@resend.dev') 

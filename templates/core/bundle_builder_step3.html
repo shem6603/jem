@@ -288,7 +288,11 @@
         const checked = document.querySelectorAll('.juice-checkbox:checked').length;
         if (checked !== requiredCount) {
             e.preventDefault();
-            alert(`Please select exactly ${requiredCount} juices. You selected ${checked}.`);
+            if (typeof showCustomModal === 'function') {
+                showCustomModal(`Please select exactly ${requiredCount} juices. You selected ${checked}.`, 'warning', 'Selection Required');
+            } else {
+                alert(`Please select exactly ${requiredCount} juices. You selected ${checked}.`);
+            }
         }
     });
     

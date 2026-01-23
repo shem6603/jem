@@ -186,7 +186,11 @@
         const selected = document.querySelector('.bundle-radio:checked');
         if (!selected) {
             e.preventDefault();
-            alert('Please select a bundle type to continue.');
+            if (typeof showCustomModal === 'function') {
+                showCustomModal('Please select a bundle type to continue.', 'warning', 'Selection Required');
+            } else {
+                alert('Please select a bundle type to continue.');
+            }
         }
     });
 </script>

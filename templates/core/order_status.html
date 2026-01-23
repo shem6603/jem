@@ -117,14 +117,119 @@
             </div>
         </div>
         
+        <!-- Order Items -->
+        {% if order_items %}
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+            <div class="p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Order Items</h2>
+                <div class="space-y-3">
+                    {% for item in order_items %}
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            {% if item.is_starred %}
+                            <span class="text-yellow-500">⭐</span>
+                            {% endif %}
+                            <span class="font-semibold text-gray-900">{{ item.item.name }}</span>
+                            <span class="text-sm text-gray-500">({{ item.item.get_category_display }})</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-gray-900">Qty: {{ item.quantity }}</span>
+                            {% if item.item.sell_price %}
+                            <span class="block text-sm text-gray-600">${{ item.item.sell_price|floatformat:2 }} each</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Payment Upload Form (if approved) -->
+        {% if order.status == 'approved' %}
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+            <div class="p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Upload Payment Proof</h2>
+                
+                <!-- Banking Info -->
+                {% if banking_info %}
+                <div class="mb-6">
+                    <h3 class="font-semibold text-gray-700 mb-3">Banking Information</h3>
+                    <div class="space-y-4">
+                        {% for bank in banking_info %}
+                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
+                            <div class="grid md:grid-cols-2 gap-3 text-sm">
+                                <div>
+                                    <span class="text-gray-600">Bank:</span>
+                                    <span class="font-bold ml-2">{{ bank.bank_name }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600">Account Name:</span>
+                                    <span class="font-bold ml-2">{{ bank.account_name }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600">Account Number:</span>
+                                    <span class="font-bold ml-2 tracking-wider">{{ bank.account_number }}</span>
+                                </div>
+                                {% if bank.account_type %}
+                                <div>
+                                    <span class="text-gray-600">Account Type:</span>
+                                    <span class="font-bold ml-2">{{ bank.account_type }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Upload Form -->
+                <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                    {% csrf_token %}
+                    
+                    <div>
+                        <label for="payment_method" class="block text-sm font-medium text-gray-700 mb-2">
+                            Payment Method
+                        </label>
+                        <select id="payment_method" name="payment_method" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">Select payment method...</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="NCB">NCB</option>
+                            <option value="Scotiabank">Scotiabank</option>
+                            <option value="JMMB">JMMB</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="payment_proof" class="block text-sm font-medium text-gray-700 mb-2">
+                            Payment Proof (Image)
+                        </label>
+                        <input 
+                            type="file" 
+                            id="payment_proof" 
+                            name="payment_proof" 
+                            accept="image/*,.pdf"
+                            required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        >
+                        <p class="mt-1 text-xs text-gray-500">Upload a screenshot or photo of your payment receipt</p>
+                    </div>
+                    
+                    <button 
+                        type="submit"
+                        class="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition"
+                    >
+                        Upload Payment Proof
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        
         <!-- Action Buttons -->
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            {% if order.status == 'approved' %}
-            <a href="{% url 'core:order_payment' order_ref=order.order_reference %}" 
-               class="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-full shadow-lg hover:shadow-xl text-center transition">
-                Make Payment
-            </a>
-            {% endif %}
             
             <a href="https://wa.me/18762030234?text=Hi!%20I%20have%20a%20question%20about%20order%20{{ order.order_reference }}" 
                target="_blank"

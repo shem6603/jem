@@ -46,7 +46,7 @@
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <!-- 10 Snacks -->
                 <label class="bundle-card cursor-pointer">
-                    <input type="radio" name="bundle_type" value="10_snacks" class="hidden peer" required>
+                    <input type="radio" name="bundle_type" value="10_snacks" class="hidden peer">
                     <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 hover:border-orange-400 peer-checked:border-orange-500 peer-checked:bg-orange-50 transition-all duration-300 h-full">
                         <div class="text-center">
                             <div class="text-5xl mb-4">🎒</div>
@@ -282,6 +282,52 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial state
     updateCustomInputs();
     updateSubmitButton();
+    
+    // Form validation - show custom modal if no bundle selected
+    const bundleForm = document.getElementById('bundle-form');
+    if (bundleForm) {
+        bundleForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Always prevent default first
+            
+            const selected = document.querySelector('input[name="bundle_type"]:checked');
+            if (!selected) {
+                // Show custom modal
+                if (typeof showCustomModal === 'function') {
+                    showCustomModal('Please select a bundle type to continue.', 'warning', 'Bundle Selection Required');
+                } else {
+                    alert('Please select a bundle type to continue.');
+                }
+                return false;
+            }
+        
+        // Additional validation for custom bundle
+        if (selected.value === 'custom') {
+            const snackQty = parseInt(document.getElementById('custom_snack_qty').value) || 0;
+            const juiceQty = parseInt(document.getElementById('custom_juice_qty').value) || 0;
+            
+            // Validate: minimum 10 snacks OR 10 juices OR (10 snacks AND 10 juices)
+            const valid = (snackQty >= 10 && juiceQty == 0) || 
+                         (juiceQty >= 10 && snackQty == 0) || 
+                         (snackQty >= 10 && juiceQty >= 10);
+            
+            if (!valid) {
+                if (typeof showCustomModal === 'function') {
+                    showCustomModal(
+                        'Custom bundle requires: minimum 10 snacks (with 0 juices), OR minimum 10 juices (with 0 snacks), OR minimum 10 snacks AND 10 juices.',
+                        'warning',
+                        'Custom Bundle Requirements'
+                    );
+                } else {
+                    alert('Custom bundle requires: minimum 10 snacks (with 0 juices), OR minimum 10 juices (with 0 snacks), OR minimum 10 snacks AND 10 juices.');
+                }
+                return false;
+            }
+        }
+        
+        // If validation passes, submit the form
+        this.submit();
+    });
+    }
 });
 </script>
 {% endblock %}
