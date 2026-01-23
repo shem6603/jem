@@ -28,6 +28,11 @@
             <div class="bg-blue-500 text-white p-4 text-center">
                 <span class="text-2xl mr-2">✅</span>
                 <span class="font-bold text-lg">Approved - Awaiting Payment</span>
+                {% if order.payment_deadline %}
+                <div class="mt-2 text-sm">
+                    <span id="deadline-countdown" class="font-semibold"></span>
+                </div>
+                {% endif %}
             </div>
             {% elif order.status == 'payment_uploaded' %}
             <div class="bg-yellow-500 text-white p-4 text-center">
@@ -136,4 +141,41 @@
         </div>
     </div>
 </div>
+
+{% if order.status == 'approved' and order.payment_deadline %}
+<script>
+(function() {
+    const deadline = new Date('{{ order.payment_deadline|date:"c" }}').getTime();
+    
+    function updateCountdown() {
+        const now = new Date().getTime();
+        const distance = deadline - now;
+        
+        if (distance < 0) {
+            document.getElementById('deadline-countdown').innerHTML = '⏰ Payment deadline has passed';
+            document.getElementById('deadline-countdown').classList.add('text-red-200');
+            return;
+        }
+        
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        let countdownText = `⏰ Payment due in: ${hours}h ${minutes}m ${seconds}s`;
+        
+        if (hours < 6) {
+            countdownText = `⚠️ ${countdownText}`;
+            document.getElementById('deadline-countdown').classList.add('text-yellow-200');
+        } else {
+            document.getElementById('deadline-countdown').classList.remove('text-yellow-200');
+        }
+        
+        document.getElementById('deadline-countdown').innerHTML = countdownText;
+    }
+    
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+})();
+</script>
+{% endif %}
 {% endblock %}

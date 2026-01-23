@@ -278,6 +278,7 @@ class CustomerOrder(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     approved_at = models.DateTimeField(blank=True, null=True)
     approved_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_orders')
+    payment_deadline = models.DateTimeField(null=True, blank=True, help_text="24-hour deadline for payment after approval")
     
     class Meta:
         ordering = ['-created_at']
@@ -351,6 +352,13 @@ class CustomerOrder(models.Model):
         if not self.is_custom:
             return True
         return self.status not in ['pending_approval']
+    
+    def is_payment_overdue(self):
+        """Check if payment deadline has passed"""
+        from django.utils import timezone
+        if self.status == 'approved' and self.payment_deadline:
+            return timezone.now() > self.payment_deadline
+        return False
 
 
 class CustomerOrderItem(models.Model):
@@ -393,7 +401,7 @@ class BankingInfo(models.Model):
 
 class PushSubscription(models.Model):
     """Store push notification subscriptions for users"""
-    endpoint = models.URLField(max_length=500, unique=True)
+    endpoint = models.TextField(unique=True)  # Changed from URLField to TextField for MariaDB compatibility
     keys = models.JSONField(help_text="Auth and p256dh keys")
     user_agent = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -402,8 +410,38 @@ class PushSubscription(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['endpoint']),
+            models.Index(fields=['endpoint'], name='pushsubscription_endpoint_idx'),
         ]
     
     def __str__(self):
         return f"Push Subscription - {self.endpoint[:50]}..."
+
+
+class CustomerSuggestion(models.Model):
+    """Customer suggestions for new items or general feedback"""
+    SUGGESTION_TYPES = [
+        ('new_item', 'New Item Request'),
+        ('feedback', 'General Feedback'),
+    ]
+    
+    order = models.ForeignKey(CustomerOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='suggestions')
+    suggestion_type = models.CharField(max_length=20, choices=SUGGESTION_TYPES)
+    item_name = models.CharField(max_length=200, blank=True, help_text="Name of item being suggested (for new_item type)")
+    message = models.TextField()
+    customer_name = models.CharField(max_length=200)
+    customer_phone = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_reviewed = models.BooleanField(default=False)
+    admin_response = models.TextField(blank=True, help_text="Admin's response to the suggestion")
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['suggestion_type']),
+            models.Index(fields=['is_reviewed']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        suggestion_type_display = dict(self.SUGGESTION_TYPES).get(self.suggestion_type, self.suggestion_type)
+        return f"{suggestion_type_display} from {self.customer_name} - {self.created_at.strftime('%Y-%m-%d')}"

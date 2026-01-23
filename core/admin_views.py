@@ -1395,6 +1395,17 @@ def admin_customer_orders(request):
     from .models import CustomerOrder
     from django.db.models import Sum
     
+    # Check for expired orders and mark as cancelled
+    expired_orders = CustomerOrder.objects.filter(
+        status='approved',
+        payment_deadline__lt=timezone.now()
+    )
+    for expired_order in expired_orders:
+        expired_order.status = 'cancelled'
+        expired_order.admin_notes = f"{expired_order.admin_notes}\n\nAuto-cancelled: Payment deadline exceeded (24 hours)".strip()
+        expired_order.save()
+        messages.warning(request, f'Order {expired_order.order_reference} auto-cancelled due to expired payment deadline.')
+    
     # Filter by status
     status_filter = request.GET.get('status', '')
     orders = CustomerOrder.objects.all().order_by('-created_at')
@@ -1469,7 +1480,18 @@ def admin_customer_order_detail(request, order_id):
                         order.admin_notes = admin_notes
                         order.approved_at = timezone.now()
                         order.approved_by = request.user
+                        # Set 24-hour payment deadline
+                        from datetime import timedelta
+                        order.payment_deadline = timezone.now() + timedelta(hours=24)
                         order.save()
+                        
+                        # Send email notifications
+                        try:
+                            from .email_utils import send_order_status_update
+                            send_order_status_update(order, 'pending_approval', 'approved')
+                        except Exception as e:
+                            print(f"Error sending approval email: {e}")
+                        
                         messages.success(request, f'Order {order.order_reference} approved with {order.profit_margin:.1f}% margin!')
                         return redirect('admin_customer_orders')
         
@@ -1523,8 +1545,17 @@ def admin_customer_order_detail(request, order_id):
             return redirect('admin_customer_orders')
         
         elif action == 'mark_completed':
+            previous_status = order.status
             order.status = 'completed'
             order.save()
+            
+            # Send email notification
+            try:
+                from .email_utils import send_order_status_update
+                send_order_status_update(order, previous_status, 'completed')
+            except Exception as e:
+                print(f"Error sending completion email: {e}")
+            
             messages.success(request, f'Order {order.order_reference} completed!')
             return redirect('admin_customer_orders')
         
@@ -1850,30 +1881,61 @@ def admin_banking_info(request):
 @user_passes_test(is_staff_user, login_url='admin_login')
 @csrf_protect
 @require_http_methods(["GET", "POST"])
-def admin_test_push(request):
-    """Test push notifications page"""
-    from .models import PushSubscription
-    from .push_utils import send_push_notification_to_all
+def admin_suggestions(request):
+    """Manage customer suggestions"""
+    from .models import CustomerSuggestion
     
-    subscription_count = PushSubscription.objects.count()
+    # Filter suggestions
+    filter_type = request.GET.get('type', '')
+    filter_reviewed = request.GET.get('reviewed', '')
+    
+    suggestions = CustomerSuggestion.objects.all().order_by('-created_at')
+    
+    if filter_type:
+        suggestions = suggestions.filter(suggestion_type=filter_type)
+    
+    if filter_reviewed == 'pending':
+        suggestions = suggestions.filter(is_reviewed=False)
+    elif filter_reviewed == 'reviewed':
+        suggestions = suggestions.filter(is_reviewed=True)
     
     if request.method == 'POST':
-        import json
-        data = json.loads(request.body)
-        title = data.get('title', 'Test Notification')
-        body = data.get('body', 'This is a test push notification!')
-        url = data.get('url', '/')
+        action = request.POST.get('action')
+        suggestion_id = request.POST.get('suggestion_id')
         
-        result = send_push_notification_to_all(title, body, url)
+        if action == 'mark_reviewed':
+            suggestion = get_object_or_404(CustomerSuggestion, id=suggestion_id)
+            suggestion.is_reviewed = True
+            suggestion.save()
+            messages.success(request, f'Suggestion marked as reviewed.')
+            return redirect('admin_suggestions')
         
-        return JsonResponse({
-            'success': True,
-            'message': f'Notification sent to {result["success_count"]} subscribers',
-            'success_count': result['success_count'],
-            'error_count': result['error_count']
-        })
+        elif action == 'add_response':
+            suggestion = get_object_or_404(CustomerSuggestion, id=suggestion_id)
+            admin_response = request.POST.get('admin_response', '').strip()
+            suggestion.admin_response = admin_response
+            suggestion.is_reviewed = True
+            suggestion.save()
+            messages.success(request, f'Response added to suggestion.')
+            return redirect('admin_suggestions')
+        
+        elif action == 'delete':
+            suggestion = get_object_or_404(CustomerSuggestion, id=suggestion_id)
+            suggestion.delete()
+            messages.success(request, f'Suggestion deleted.')
+            return redirect('admin_suggestions')
+    
+    # Counts
+    pending_count = CustomerSuggestion.objects.filter(is_reviewed=False).count()
+    new_item_count = CustomerSuggestion.objects.filter(suggestion_type='new_item', is_reviewed=False).count()
+    feedback_count = CustomerSuggestion.objects.filter(suggestion_type='feedback', is_reviewed=False).count()
     
     context = {
-        'subscription_count': subscription_count,
+        'suggestions': suggestions,
+        'filter_type': filter_type,
+        'filter_reviewed': filter_reviewed,
+        'pending_count': pending_count,
+        'new_item_count': new_item_count,
+        'feedback_count': feedback_count,
     }
-    return render(request, 'admin/test_push.html', context)
+    return render(request, 'admin/suggestions.html', context)

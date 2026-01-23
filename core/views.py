@@ -545,6 +545,20 @@ def bundle_builder_details(request):
                 
                 order.save()
             
+            # Send email notification to admin when order is created
+            try:
+                from .email_utils import send_order_notification_to_admin
+                email_sent = send_order_notification_to_admin(order)
+                if email_sent:
+                    print(f"Order notification email sent successfully for order {order.order_reference}")
+                else:
+                    print(f"Warning: Order notification email failed for order {order.order_reference}")
+            except Exception as e:
+                # Don't fail order creation if email fails
+                print(f"Error sending order notification email: {e}")
+                import traceback
+                traceback.print_exc()
+            
             # Clear session
             for key in ['bundle_type', 'selected_snacks', 'selected_juices', 'starred_snacks', 'starred_juices']:
                 request.session.pop(key, None)
@@ -821,3 +835,63 @@ def get_vapid_public_key(request):
     from django.conf import settings
     vapid_public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
     return JsonResponse({'publicKey': vapid_public_key})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def submit_suggestion(request):
+    """Handle customer suggestion submission"""
+    import json
+    from .models import CustomerSuggestion
+    from .email_utils import send_suggestion_notification
+    
+    try:
+        data = json.loads(request.body)
+        suggestion_type = data.get('suggestion_type')
+        item_name = data.get('item_name', '').strip()
+        message = data.get('message', '').strip()
+        customer_name = data.get('customer_name', '').strip()
+        customer_phone = data.get('customer_phone', '').strip()
+        
+        # Validation
+        if not suggestion_type or suggestion_type not in ['new_item', 'feedback']:
+            return JsonResponse({'success': False, 'error': 'Invalid suggestion type'}, status=400)
+        
+        if not message:
+            return JsonResponse({'success': False, 'error': 'Message is required'}, status=400)
+        
+        if not customer_name:
+            return JsonResponse({'success': False, 'error': 'Name is required'}, status=400)
+        
+        # For new_item type, item_name is required
+        if suggestion_type == 'new_item' and not item_name:
+            return JsonResponse({'success': False, 'error': 'Item name is required for new item requests'}, status=400)
+        
+        # Create suggestion
+        suggestion = CustomerSuggestion.objects.create(
+            suggestion_type=suggestion_type,
+            item_name=item_name if suggestion_type == 'new_item' else '',
+            message=message,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+        )
+        
+        # Send email notification to admin
+        try:
+            email_sent = send_suggestion_notification(suggestion)
+            if email_sent:
+                print(f"Suggestion email sent successfully for suggestion ID {suggestion.id}")
+            else:
+                print(f"Warning: Suggestion email failed for suggestion ID {suggestion.id}")
+        except Exception as e:
+            print(f"Error sending suggestion email: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the request if email fails
+        
+        return JsonResponse({'success': True, 'message': 'Suggestion submitted successfully'})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

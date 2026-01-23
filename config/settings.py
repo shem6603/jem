@@ -344,3 +344,8 @@ VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'MIGHAgEAMBMGByqGSM49AgEGCCqG
 VAPID_CLAIMS = {
     "sub": "mailto:shemmaricketts@gmail.com"  # Must be mailto: format
 }
+
+# Resend Email Configuration
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+ADMIN_EMAIL = 'justeatmore876@gmail.com'
+FROM_EMAIL = os.getenv('FROM_EMAIL', 'orders@jem.rixsoft.org')  # Must be verified in Resend

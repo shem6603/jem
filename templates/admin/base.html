@@ -53,9 +53,9 @@
                     <span class="mr-3">🏦</span>
                     <span>Banking</span>
                 </a>
-                <a href="{% url 'admin_test_push' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_test_push' %}bg-gray-800{% endif %}">
-                    <span class="mr-3">🔔</span>
-                    <span>Test Push</span>
+                <a href="{% url 'admin_suggestions' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_suggestions' %}bg-gray-800{% endif %}">
+                    <span class="mr-3">💡</span>
+                    <span>Suggestions</span>
                 </a>
                 {% if user.is_superuser %}
                 <a href="{% url 'admin_users' %}" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-800 transition {% if request.resolver_match.url_name == 'admin_users' or request.resolver_match.url_name == 'admin_create_user' %}bg-gray-800{% endif %}">
@@ -126,6 +126,9 @@
                         </a>
                         <a href="{% url 'admin_banking_info' %}" class="block px-4 py-3 text-white hover:bg-gray-800 rounded-lg text-base font-medium transition">
                             🏦 Banking
+                        </a>
+                        <a href="{% url 'admin_suggestions' %}" class="block px-4 py-3 text-white hover:bg-gray-800 rounded-lg text-base font-medium transition">
+                            💡 Suggestions
                         </a>
                         {% if user.is_superuser %}
                         <a href="{% url 'admin_users' %}" class="block px-4 py-3 text-white hover:bg-gray-800 rounded-lg text-base font-medium transition">

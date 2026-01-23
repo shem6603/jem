@@ -33,4 +33,7 @@ urlpatterns = [
     path('push/unsubscribe/', views.push_unsubscribe, name='push_unsubscribe'),
     path('push/vapid-key/', views.get_vapid_public_key, name='get_vapid_public_key'),
     path('push/send-test/', views.send_push_notification, name='send_push_notification'),
+    
+    # Suggestion endpoint
+    path('suggestion/', views.submit_suggestion, name='submit_suggestion'),
 ]

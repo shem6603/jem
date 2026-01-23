@@ -101,6 +101,21 @@
                         <span class="mr-2">📤</span> Upload Payment Proof
                     </h2>
                     
+                    {% if order.payment_deadline %}
+                    <div class="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-6">
+                        <div class="flex items-start">
+                            <span class="text-2xl mr-3">⏰</span>
+                            <div>
+                                <p class="text-red-900 font-bold text-sm mb-1">Payment Deadline</p>
+                                <p class="text-red-800 text-sm mb-2">
+                                    <span id="deadline-text"></span>
+                                </p>
+                                <p class="text-red-700 text-xs" id="deadline-countdown"></p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
                         <p class="text-yellow-800 text-sm">
                             <strong>Important:</strong> After making your bank transfer, please upload a screenshot of the transfer confirmation here or send it via WhatsApp.
@@ -180,5 +195,43 @@ function previewImage(input) {
         reader.readAsDataURL(input.files[0]);
     }
 }
+
+{% if order.payment_deadline %}
+(function() {
+    const deadline = new Date('{{ order.payment_deadline|date:"c" }}').getTime();
+    const deadlineDate = new Date(deadline);
+    
+    // Display deadline date/time
+    const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    document.getElementById('deadline-text').textContent = `Payment must be received by ${deadlineDate.toLocaleDateString('en-US', options)}`;
+    
+    function updateCountdown() {
+        const now = new Date().getTime();
+        const distance = deadline - now;
+        
+        if (distance < 0) {
+            document.getElementById('deadline-countdown').innerHTML = '⚠️ Deadline has passed - Please contact us immediately';
+            document.getElementById('deadline-countdown').classList.add('font-bold');
+            return;
+        }
+        
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        let countdownText = `Time remaining: ${hours}h ${minutes}m ${seconds}s`;
+        
+        if (hours < 6) {
+            countdownText = `⚠️ ${countdownText} - Please pay soon!`;
+            document.getElementById('deadline-countdown').classList.add('font-bold');
+        }
+        
+        document.getElementById('deadline-countdown').innerHTML = countdownText;
+    }
+    
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+})();
+{% endif %}
 </script>
 {% endblock %}
