@@ -4,6 +4,12 @@
 # Enable Rewrite Engine
 RewriteEngine On
 
+# Serve .well-known files directly (required for TWA/Digital Asset Links)
+# This MUST come before other rules
+RewriteCond %{REQUEST_URI} ^/\.well-known/
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^(.*)$ - [L]
+
 # Serve media files directly (uploaded files)
 # If the file exists, serve it directly (don't rewrite)
 RewriteCond %{REQUEST_URI} ^/media/
@@ -28,5 +34,25 @@ RewriteRule ^(.*)$ passenger_wsgi.py/$1 [L]
 <IfModule mod_headers.c>
     <FilesMatch "\.(css|js|jpg|jpeg|png|gif|ico|svg|webp|woff|woff2|ttf|eot|pdf)$">
         Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+</IfModule>
+
+# Set proper content type for assetlinks.json (Digital Asset Links)
+<IfModule mod_mime.c>
+    AddType application/json .json
+</IfModule>
+
+# Allow access to .well-known directory (required for TWA verification)
+<Directory ".well-known">
+    Options -Indexes
+    AllowOverride None
+    Require all granted
+</Directory>
+
+# Ensure CORS headers for assetlinks.json
+<IfModule mod_headers.c>
+    <FilesMatch "assetlinks\.json$">
+        Header set Content-Type "application/json"
+        Header set Access-Control-Allow-Origin "*"
     </FilesMatch>
 </IfModule>

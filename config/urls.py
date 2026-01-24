@@ -25,6 +25,30 @@ import os
 import mimetypes
 
 
+def assetlinks_json(request):
+    """
+    Serve Digital Asset Links at /.well-known/assetlinks.json for TWA verification.
+    Required so the Android TWA (Trusted Web Activity) can verify and run in
+    full-screen app mode instead of falling back to browser UI.
+    """
+    from django.http import JsonResponse
+    # Try .well-known directory first, then root
+    file_path = os.path.join(settings.BASE_DIR, '.well-known', 'assetlinks.json')
+    if not os.path.exists(file_path):
+        file_path = os.path.join(settings.BASE_DIR, 'assetlinks.json')
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        raise Http404("assetlinks.json not found")
+    
+    import json
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+    
+    response = JsonResponse(data, safe=False)
+    response['Cache-Control'] = 'public, max-age=3600'
+    response['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
 def serve_media(request, path):
     """
     Custom media file serving view that works in production.
@@ -56,9 +80,10 @@ def serve_media(request, path):
 
 
 urlpatterns = [
+    # Digital Asset Links for TWA verification (must be at /.well-known/assetlinks.json)
+    path('.well-known/assetlinks.json', assetlinks_json, name='assetlinks_json'),
     # Favicon handler (browsers automatically request /favicon.ico)
     path('favicon.ico', views.favicon_ico, name='favicon_ico'),
-    
     # Custom admin routes (must come BEFORE Django admin)
     path('admin/login/', admin_views.admin_login, name='admin_login'),
     path('admin/logout/', admin_views.admin_logout, name='admin_logout'),

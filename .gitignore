@@ -49,3 +49,7 @@ db.sqlite3-journal
 # OS
 .DS_Store
 Thumbs.db
+
+# Signing keys (never commit to version control)
+*.keystore
+*.jks

@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "org.rixsoft.jem.twa",
+    "sha256_cert_fingerprints": ["E2:43:A6:C5:AF:9C:B8:B2:94:CF:FE:B1:9F:39:44:C2:C5:2E:14:A0:4B:AD:F8:58:EF:1A:CB:F0:08:F5:79:6C"]
+  }
+}]
