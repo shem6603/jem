@@ -232,13 +232,21 @@ class Receipt(models.Model):
 class CustomerOrder(models.Model):
     """Customer-submitted orders that require approval for custom bundles"""
     STATUS_CHOICES = [
-        ('pending_approval', 'Pending Approval'),  # For custom bundles
-        ('approved', 'Approved'),  # Admin approved, awaiting payment
-        ('payment_uploaded', 'Payment Uploaded'),  # Customer uploaded proof
-        ('payment_verified', 'Payment Verified'),  # Admin verified payment
-        ('processing', 'Processing'),  # Being prepared
-        ('completed', 'Completed'),
+        ('pending_approval', 'Pending Approval'),  # Initial state
+        ('approved', 'Approved'),  # Admin approved the order
+        ('processing', 'Processing'),  # Being prepared - INVENTORY DEDUCTED HERE
+        ('paid', 'Paid'),  # Admin confirmed payment received
+        ('pickup', 'Ready for Pickup'),  # Ready for customer to collect
+        ('completed', 'Completed'),  # Order complete
         ('cancelled', 'Cancelled'),
+    ]
+    
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('ncb', 'NCB'),
+        ('scotiabank', 'Scotiabank'),
+        ('other', 'Other'),
     ]
     
     BUNDLE_TYPE_CHOICES = [
@@ -268,9 +276,10 @@ class CustomerOrder(models.Model):
     net_profit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     profit_margin = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
-    # Payment proof
+    # Payment info
     payment_proof = models.ImageField(upload_to='payment_proofs/%Y/%m/%d/', blank=True, null=True)
-    payment_method = models.CharField(max_length=50, blank=True, null=True, help_text="e.g., Bank Transfer, NCB, etc.")
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
+    paid_at = models.DateTimeField(blank=True, null=True, help_text="When admin confirmed payment")
     
     # Tracking
     order_reference = models.CharField(max_length=20, unique=True, blank=True)

@@ -1,0 +1,121 @@
+<!-- Order Progress -->
+<div class="mb-6 p-3 bg-gray-50 rounded-lg">
+    <p class="text-xs text-gray-500 mb-2">Order Progress:</p>
+    <div class="flex items-center text-xs gap-1 flex-wrap">
+        <span class="{% if order.status == 'pending_approval' %}bg-yellow-100 text-yellow-700 font-bold{% else %}bg-gray-200 text-gray-500{% endif %} px-2 py-1 rounded">1. Pending</span>
+        <span class="text-gray-400">→</span>
+        <span class="{% if order.status == 'approved' %}bg-blue-100 text-blue-700 font-bold{% elif order.status in 'processing,paid,pickup,completed' %}bg-gray-200 text-gray-500{% else %}bg-gray-100 text-gray-400{% endif %} px-2 py-1 rounded">2. Approved</span>
+        <span class="text-gray-400">→</span>
+        <span class="{% if order.status == 'processing' %}bg-orange-100 text-orange-700 font-bold{% elif order.status in 'paid,pickup,completed' %}bg-gray-200 text-gray-500{% else %}bg-gray-100 text-gray-400{% endif %} px-2 py-1 rounded">3. Processing</span>
+        <span class="text-gray-400">→</span>
+        <span class="{% if order.status == 'paid' %}bg-green-100 text-green-700 font-bold{% elif order.status in 'pickup,completed' %}bg-gray-200 text-gray-500{% else %}bg-gray-100 text-gray-400{% endif %} px-2 py-1 rounded">4. Paid</span>
+        <span class="text-gray-400">→</span>
+        <span class="{% if order.status == 'pickup' %}bg-purple-100 text-purple-700 font-bold{% elif order.status == 'completed' %}bg-gray-200 text-gray-500{% else %}bg-gray-100 text-gray-400{% endif %} px-2 py-1 rounded">5. Pickup</span>
+        <span class="text-gray-400">→</span>
+        <span class="{% if order.status == 'completed' %}bg-green-500 text-white font-bold{% else %}bg-gray-100 text-gray-400{% endif %} px-2 py-1 rounded">6. Done</span>
+    </div>
+</div>
+
+{% if order.status == 'pending_approval' %}
+<!-- Step 1: Approve Order -->
+<form method="post" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="approve">
+    {% if order.bundle_type == 'custom' %}
+    <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Set Price (JMD) <span class="text-red-500">*</span></label>
+        <input type="number" name="new_price" value="{{ suggested_price }}" required
+               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+    </div>
+    {% endif %}
+    <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Notes to Customer</label>
+        <textarea name="admin_notes" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="Optional message for the customer...">{{ order.admin_notes }}</textarea>
+    </div>
+    <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-base">✓ Approve Order</button>
+</form>
+
+{% elif order.status == 'approved' %}
+<!-- Step 2: Start Processing (Deducts Inventory) -->
+<form method="post" class="space-y-3 action-form-ajax">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="mark_processing">
+    <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
+        <p class="text-sm text-orange-800"><strong>⚠️ Note:</strong> Starting processing will <strong>deduct items from inventory</strong>.</p>
+    </div>
+    <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition text-base">📦 Start Processing</button>
+</form>
+
+{% elif order.status == 'processing' %}
+<!-- Step 3: Confirm Payment -->
+<form method="post" class="space-y-4 action-form-ajax">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="mark_paid">
+    <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Payment Method</label>
+        <select name="payment_method" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-base">
+            <option value="cash">💵 Cash</option>
+            <option value="bank_transfer">🏦 Bank Transfer</option>
+            <option value="ncb">🏦 NCB</option>
+            <option value="scotiabank">🏦 Scotiabank</option>
+            <option value="other">📝 Other</option>
+        </select>
+    </div>
+    <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-base">💰 Confirm Payment Received</button>
+</form>
+
+{% elif order.status == 'paid' %}
+<!-- Step 4: Ready for Pickup -->
+<form method="post" class="space-y-3 action-form-ajax">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="mark_pickup">
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
+        <p class="text-sm text-purple-800">Payment received via <strong>{{ order.get_payment_method_display|default:"N/A" }}</strong>{% if order.paid_at %} on {{ order.paid_at|date:"M d, Y H:i" }}{% endif %}</p>
+    </div>
+    <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-purple-500 text-white font-bold rounded-lg hover:bg-purple-600 transition text-base">📍 Mark Ready for Pickup</button>
+</form>
+
+{% elif order.status == 'pickup' %}
+<!-- Step 5: Complete Order -->
+<form method="post" class="space-y-3 action-form-ajax">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="mark_completed">
+    <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+        <p class="text-sm text-green-800">Order is ready for customer to collect at: <strong>{{ order.pickup_spot }}</strong></p>
+    </div>
+    <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition text-base">🎉 Mark as Completed</button>
+</form>
+
+{% elif order.status == 'completed' %}
+<div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+    <span class="text-3xl">✅</span>
+    <p class="text-green-800 font-bold mt-2">Order Completed!</p>
+    {% if order.payment_method %}<p class="text-sm text-green-600 mt-1">Paid via {{ order.get_payment_method_display }}</p>{% endif %}
+</div>
+{% endif %}
+
+{% if order.status not in 'completed,cancelled' %}
+<div class="mt-6 pt-4 border-t border-gray-200">
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="cancel">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Cancel Order</label>
+        <textarea name="admin_notes" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg mb-2 text-base" placeholder="Reason for cancellation..."></textarea>
+        <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 transition text-base"
+                onclick="return confirm('Are you sure you want to cancel this order?')">Cancel Order</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Delete Order (Danger Zone) -->
+<div class="mt-6 pt-4 border-t-2 border-red-200">
+    <p class="text-xs text-red-600 font-semibold uppercase mb-2">Danger Zone</p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition text-base"
+                onclick="return confirm('⚠️ WARNING: This will PERMANENTLY DELETE this order and all its items. This action cannot be undone!\n\nAre you absolutely sure you want to delete order {{ order.order_reference }}?')">🗑️ Delete Order Permanently</button>
+    </form>
+    <p class="text-xs text-red-500 mt-2 text-center">This action cannot be undone!</p>
+</div>

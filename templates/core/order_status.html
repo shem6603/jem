@@ -34,23 +34,24 @@
                 </div>
                 {% endif %}
             </div>
-            {% elif order.status == 'payment_uploaded' %}
-            <div class="bg-yellow-500 text-white p-4 text-center">
-                <span class="text-2xl mr-2">💳</span>
-                <span class="font-bold text-lg">Payment Uploaded - Verifying</span>
-            </div>
-            {% elif order.status == 'payment_verified' %}
-            <div class="bg-teal-500 text-white p-4 text-center">
-                <span class="text-2xl mr-2">✓</span>
-                <span class="font-bold text-lg">Payment Verified</span>
-            </div>
             {% elif order.status == 'processing' %}
             <div class="bg-orange-500 text-white p-4 text-center">
                 <span class="text-2xl mr-2">📦</span>
                 <span class="font-bold text-lg">Processing Your Order</span>
             </div>
-            {% elif order.status == 'completed' %}
+            {% elif order.status == 'paid' %}
             <div class="bg-green-500 text-white p-4 text-center">
+                <span class="text-2xl mr-2">💵</span>
+                <span class="font-bold text-lg">Payment Received</span>
+            </div>
+            {% elif order.status == 'pickup' %}
+            <div class="bg-purple-500 text-white p-4 text-center">
+                <span class="text-2xl mr-2">📍</span>
+                <span class="font-bold text-lg">Ready for Pickup!</span>
+                <div class="text-sm mt-1">Collect at: {{ order.pickup_spot }}</div>
+            </div>
+            {% elif order.status == 'completed' %}
+            <div class="bg-green-600 text-white p-4 text-center">
                 <span class="text-2xl mr-2">🎉</span>
                 <span class="font-bold text-lg">Order Complete!</span>
             </div>
@@ -116,34 +117,6 @@
                 {% endif %}
             </div>
         </div>
-        
-        <!-- Order Items -->
-        {% if order_items %}
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-            <div class="p-6">
-                <h2 class="text-xl font-bold text-gray-900 mb-4">Order Items</h2>
-                <div class="space-y-3">
-                    {% for item in order_items %}
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div class="flex items-center space-x-3">
-                            {% if item.is_starred %}
-                            <span class="text-yellow-500">⭐</span>
-                            {% endif %}
-                            <span class="font-semibold text-gray-900">{{ item.item.name }}</span>
-                            <span class="text-sm text-gray-500">({{ item.item.get_category_display }})</span>
-                        </div>
-                        <div class="text-right">
-                            <span class="font-bold text-gray-900">Qty: {{ item.quantity }}</span>
-                            {% if item.item.sell_price %}
-                            <span class="block text-sm text-gray-600">${{ item.item.sell_price|floatformat:2 }} each</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
         
         <!-- Payment Upload Form (if approved) -->
         {% if order.status == 'approved' %}

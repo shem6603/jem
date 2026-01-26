@@ -252,7 +252,7 @@ LOGOUT_REDIRECT_URL = 'admin_login'
 # PWA Configuration
 PWA_APP_NAME = 'J.E.M - Just Eat More'
 PWA_APP_DESCRIPTION = "Premium snack bundles for kids in Jamaica. Perfect for lunch boxes, after-school treats, and class parties."
-PWA_APP_THEME_COLOR = '#F97316'  # Orange color matching your brand
+PWA_APP_THEME_COLOR = '#2563EB'  # Blue color for status bar and navigation overlay
 PWA_APP_BACKGROUND_COLOR = '#FFFFFF'
 PWA_APP_DISPLAY = 'standalone'
 PWA_APP_SCOPE = '/'
@@ -339,11 +339,6 @@ PWA_APP_OFFLINE_URL = '/offline/'
 # Generate these keys using: python generate_vapid_keys.py
 # Store these securely - never commit private key to version control
 # For local development, keys are set below. For production, use environment variables.
-VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', 'BEh1VJaAFZQ6B7Y_9ugjRl3nDNexDSEgpBDy0gkvINZssO7RoYh1K9AN4sauxBDl8MAuNzMlN7tk90UtyJUyOrY')
-VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgwuUC8e9WXMVKKx8IesQfBLHtQKh4WrA1IZPbiCakEvWhRANCAARIdVSWgBWUOge2P/boI0Zd5wzXsQ0hIKQQ8tIJLyDWbLDu0aGIdSvQDeLGrsQQ5fDALjczJTe7ZPdFLciVMjq2')
-VAPID_CLAIMS = {
-    "sub": "mailto:shemmaricketts@gmail.com"  # Must be mailto: format
-}
 
 # Resend Email Configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')

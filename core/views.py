@@ -21,6 +21,11 @@ def offline(request):
     return render(request, 'core/offline.html')
 
 
+def privacy_policy(request):
+    """Privacy policy page - required for app store listings (e.g. Google Play)"""
+    return render(request, 'core/privacy.html')
+
+
 def is_staff_user(user):
     """Check if user is staff"""
     return user.is_authenticated and user.is_staff
@@ -675,37 +680,8 @@ def order_payment(request, order_ref):
 
 
 def order_status(request, order_ref):
-    """Order status page with phone verification and payment upload"""
+    """Order status page - shows status, bundle, order reference. Payment upload when approved."""
     order = get_object_or_404(CustomerOrder, order_reference=order_ref)
-    
-    # Check if phone is verified in session for this order
-    verified_phone = request.session.get(f'verified_phone_{order_ref}')
-    
-    # If not verified, require phone verification
-    if not verified_phone:
-        if request.method == 'POST':
-            phone = request.POST.get('phone', '').strip()
-            # Normalize phone (remove spaces, dashes, etc.)
-            phone_normalized = ''.join(filter(str.isdigit, phone))
-            order_phone_normalized = ''.join(filter(str.isdigit, order.customer_phone))
-            
-            if phone_normalized == order_phone_normalized:
-                # Phone matches - store in session
-                request.session[f'verified_phone_{order_ref}'] = phone_normalized
-                verified_phone = phone_normalized
-                messages.success(request, 'Phone verified! You can now view your order.')
-            else:
-                messages.error(request, 'Phone number does not match this order. Please try again.')
-                return render(request, 'core/order_verify.html', {
-                    'order_ref': order_ref,
-                    'order': order,
-                })
-        else:
-            # Show phone verification form
-            return render(request, 'core/order_verify.html', {
-                'order_ref': order_ref,
-                'order': order,
-            })
     
     # Handle payment upload if status is 'approved'
     if request.method == 'POST' and order.status == 'approved':
@@ -759,28 +735,18 @@ def order_status(request, order_ref):
 
 
 def check_order(request):
-    """Allow customer to check their order status with phone verification"""
+    """Check order status by order reference only. Shows status, bundle, and order reference."""
     if request.method == 'POST':
         order_ref = request.POST.get('order_ref', '').strip().upper()
-        phone = request.POST.get('phone', '').strip()
         
-        if order_ref and phone:
+        if order_ref:
             try:
                 order = CustomerOrder.objects.get(order_reference=order_ref)
-                # Normalize phone numbers for comparison
-                phone_normalized = ''.join(filter(str.isdigit, phone))
-                order_phone_normalized = ''.join(filter(str.isdigit, order.customer_phone))
-                
-                if phone_normalized == order_phone_normalized:
-                    # Phone matches - store in session and redirect
-                    request.session[f'verified_phone_{order_ref}'] = phone_normalized
-                    return redirect('core:order_status', order_ref=order.order_reference)
-                else:
-                    messages.error(request, 'Phone number does not match this order. Please check and try again.')
+                return redirect('core:order_status', order_ref=order.order_reference)
             except CustomerOrder.DoesNotExist:
                 messages.error(request, 'Order not found. Please check the reference number.')
         else:
-            messages.error(request, 'Please provide both order reference and phone number.')
+            messages.error(request, 'Please enter your order reference.')
     
     return render(request, 'core/check_order.html')
 
@@ -811,10 +777,9 @@ def my_orders(request):
                     else:
                         messages.error(request, 'Phone number does not match this order.')
                 else:
-                    # If no phone provided, just show the order (but require phone verification to view details)
                     orders = [order]
                     phone_verified = True
-                    messages.success(request, 'Order found! Please verify your phone number to view details.')
+                    messages.success(request, 'Order found!')
                     search_type = 'order_ref'
             except CustomerOrder.DoesNotExist:
                 messages.error(request, 'Order not found. Please check the order reference.')

@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Privacy Policy - J.E.M - Just Eat More{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 pt-24 pb-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+        <div class="bg-white rounded-2xl shadow-lg p-8 md:p-12">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
+            <p class="text-gray-500 text-sm mb-8">Last updated: January 23, 2025</p>
+
+            <div class="prose prose-gray max-w-none space-y-6">
+                <p class="text-gray-600 leading-relaxed">
+                    J.E.M – Just Eat More ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our website, mobile app, or services.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">1. Information We Collect</h2>
+                <p class="text-gray-600">We collect information you provide when ordering, contacting us, or using our services:</p>
+                <ul class="list-disc pl-6 text-gray-600 space-y-1">
+                    <li><strong>Order information:</strong> Name, phone number, WhatsApp number, and pickup or delivery location</li>
+                    <li><strong>Push notifications (optional):</strong> If you enable notifications, we store the subscription data (endpoint and keys) needed to send them</li>
+                    <li><strong>Suggestions and feedback:</strong> Name, phone (optional), and message when you submit a suggestion</li>
+                </ul>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">2. How We Use Your Information</h2>
+                <p class="text-gray-600">We use your information to:</p>
+                <ul class="list-disc pl-6 text-gray-600 space-y-1">
+                    <li>Process and fulfil your orders</li>
+                    <li>Contact you about your orders (e.g. WhatsApp, phone)</li>
+                    <li>Send order status updates and payment reminders (if you have opted in)</li>
+                    <li>Respond to your suggestions and feedback</li>
+                    <li>Improve our services and user experience</li>
+                </ul>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">3. Children's Privacy</h2>
+                <p class="text-gray-600">
+                    Our snack bundles are intended for use by families. We do not knowingly collect personal information directly from children under 13. Orders and account activity are conducted by parents or guardians. If you believe a child under 13 has provided us with personal information, please contact us and we will delete it.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">4. Sharing Your Information</h2>
+                <p class="text-gray-600">
+                    We do not sell your personal information. We may share information only as needed to operate our business, for example with delivery partners (e.g. Knutsford Express) or payment-related services. We may also share information if required by law.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">5. Data Security</h2>
+                <p class="text-gray-600">
+                    We use appropriate technical and organisational measures to protect your data. Our site is served over HTTPS. We retain your information only as long as needed for orders, support, and legal obligations.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">6. Your Rights</h2>
+                <p class="text-gray-600">
+                    You may request access to, correction of, or deletion of your personal information. You can withdraw push notification consent at any time through your device or browser. To exercise these rights, contact us using the details below.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">7. Third-Party Services</h2>
+                <p class="text-gray-600">
+                    Our app and website may link to or use third-party services such as WhatsApp for ordering and communication. Their use of your data is governed by their own privacy policies. We encourage you to review those policies.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">8. Changes to This Policy</h2>
+                <p class="text-gray-600">
+                    We may update this Privacy Policy from time to time. We will post the updated policy on this page and update the "Last updated" date. Continued use of our services after changes constitutes acceptance of the updated policy.
+                </p>
+
+                <h2 class="text-xl font-semibold text-gray-900 mt-8">9. Contact Us</h2>
+                <p class="text-gray-600">
+                    If you have questions about this Privacy Policy or your personal information, contact us:
+                </p>
+                <ul class="list-none pl-0 text-gray-600 space-y-1">
+                    <li><strong>J.E.M – Just Eat More</strong></li>
+                    <li>St. Catherine, Jamaica</li>
+                    <li>WhatsApp: <a href="https://wa.me/18762030234" class="text-blue-600 hover:underline">+1 876 203 0234</a></li>
+                </ul>
+            </div>
+
+            <div class="mt-12 pt-8 border-t border-gray-200">
+                <a href="{% url 'core:home' %}" class="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

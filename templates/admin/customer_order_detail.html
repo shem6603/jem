@@ -18,13 +18,13 @@
         </div>
         
         <!-- Status Badge -->
-        <span class="px-4 py-2 text-lg font-bold rounded-lg
-            {% if order.status == 'pending_approval' %}bg-purple-100 text-purple-800
+        <span id="order-status-badge" class="px-4 py-2 text-lg font-bold rounded-lg
+            {% if order.status == 'pending_approval' %}bg-yellow-100 text-yellow-800
             {% elif order.status == 'approved' %}bg-blue-100 text-blue-800
-            {% elif order.status == 'payment_uploaded' %}bg-yellow-100 text-yellow-800
-            {% elif order.status == 'payment_verified' %}bg-teal-100 text-teal-800
             {% elif order.status == 'processing' %}bg-orange-100 text-orange-800
-            {% elif order.status == 'completed' %}bg-green-100 text-green-800
+            {% elif order.status == 'paid' %}bg-green-100 text-green-800
+            {% elif order.status == 'pickup' %}bg-purple-100 text-purple-800
+            {% elif order.status == 'completed' %}bg-green-500 text-white
             {% elif order.status == 'cancelled' %}bg-red-100 text-red-800
             {% else %}bg-gray-100 text-gray-800{% endif %}">
             {{ order.get_status_display }}
@@ -143,9 +143,17 @@
                 {% endif %}
             </div>
             {% endif %}
-            <div class="text-right">
-                <p class="text-xs text-gray-500">Total Cost</p>
-                <p class="text-lg font-bold text-gray-900" id="header-total-cost">${{ order.total_cost|floatformat:2 }}</p>
+            <div class="flex items-center gap-4">
+                <button type="button" id="save-changes-btn" onclick="saveChanges()" class="hidden px-4 py-2 min-h-[44px] bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition text-sm">
+                    💾 Save Changes
+                </button>
+                <div id="save-status" class="text-xs hidden">
+                    <span id="save-status-text" class="inline-block"></span>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-gray-500">Total Cost</p>
+                    <p class="text-lg font-bold text-gray-900" id="header-total-cost">${{ order.total_cost|floatformat:2 }}</p>
+                </div>
             </div>
         </div>
     </div>
@@ -182,7 +190,7 @@
                 </thead>
                 <tbody>
                     {% for item in order_items %}
-                    <tr class="item-row border-b border-gray-100 hover:bg-gray-50 transition" data-category="{{ item.item.category }}">
+                    <tr class="item-row border-b border-gray-100 hover:bg-gray-50 transition" data-category="{{ item.item.category }}" data-order-item-id="{{ item.id }}">
                         <td class="py-3 px-4">
                             <div class="flex items-center">
                                 {% if item.item.category == 'snack' %}
@@ -207,28 +215,30 @@
                             ${{ item.item.cost_price|floatformat:2 }}
                         </td>
                         <td class="py-3 px-4 text-center">
-                            <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="0" max="100"
-                                   class="quantity-input w-20 px-2 py-2 min-h-[44px] border border-gray-300 rounded text-center text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                   data-item-id="{{ item.id }}"
-                                   data-category="{{ item.item.category }}"
-                                   onchange="updateQuantity({{ item.id }}, this.value)">
+                            <div class="flex flex-col items-center gap-1">
+                                <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="1" 
+                                       max="{% if order.status in 'processing,paid,pickup,completed' %}{{ item.quantity|add:item.item.current_stock }}{% else %}{{ item.item.current_stock }}{% endif %}"
+                                       class="quantity-input w-20 px-2 py-2 min-h-[44px] border border-gray-300 rounded text-center text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                       data-item-id="{{ item.id }}"
+                                       data-category="{{ item.item.category }}"
+                                       data-cost="{{ item.item.cost_price }}"
+                                       data-stock="{% if order.status in 'processing,paid,pickup,completed' %}{{ item.quantity|add:item.item.current_stock }}{% else %}{{ item.item.current_stock }}{% endif %}"
+                                       data-original-qty="{{ item.quantity }}">
+                                <span class="text-xs text-gray-400">Stock: {% if order.status in 'processing,paid,pickup,completed' %}{{ item.quantity|add:item.item.current_stock }}{% else %}{{ item.item.current_stock }}{% endif %}</span>
+                            </div>
                         </td>
                         <td class="py-3 px-4 text-right font-semibold text-gray-900 item-subtotal" data-item-id="{{ item.id }}">
                             ${{ item.subtotal_cost|floatformat:2 }}
                         </td>
                         <td class="py-3 px-4 text-center">
-                            <form method="post" class="inline remove-item-form" data-item-name="{{ item.item.name }}">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="remove_item">
-                                <input type="hidden" name="item_id" value="{{ item.id }}">
-                                <button type="submit" class="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition" 
-                                        title="Remove {{ item.item.name }}"
-                                        onclick="return confirm('Remove {{ item.item.name }} from this order?')">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                    </svg>
-                                </button>
-                            </form>
+                            <button type="button" class="remove-item-btn text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition"
+                                    title="Remove {{ item.item.name }}"
+                                    data-order-item-id="{{ item.id }}"
+                                    data-item-name="{{ item.item.name }}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -244,7 +254,7 @@
         <!-- Mobile Card View -->
         <div class="md:hidden space-y-4 mt-4">
             {% for item in order_items %}
-            <div class="item-row-card bg-gray-50 rounded-lg p-4 border border-gray-200" data-category="{{ item.item.category }}">
+            <div class="item-row-card bg-gray-50 rounded-lg p-4 border border-gray-200" data-category="{{ item.item.category }}" data-order-item-id="{{ item.id }}">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center flex-1">
                         {% if item.item.category == 'snack' %}
@@ -266,12 +276,15 @@
                 </div>
                 <div class="flex items-center justify-between">
                     <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Quantity</label>
-                        <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="0" max="100"
+                        <label class="text-xs text-gray-500 mb-1 block">Qty (Stock: {% if order.status in 'processing,paid,pickup,completed' %}{{ item.quantity|add:item.item.current_stock }}{% else %}{{ item.item.current_stock }}{% endif %})</label>
+                        <input type="number" name="qty_{{ item.id }}" value="{{ item.quantity }}" min="1" 
+                               max="{% if order.status in 'processing,paid,pickup,completed' %}{{ item.quantity|add:item.item.current_stock }}{% else %}{{ item.item.current_stock }}{% endif %}"
                                class="quantity-input w-24 px-3 py-3 min-h-[44px] border border-gray-300 rounded-lg text-center text-sm font-semibold focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                data-item-id="{{ item.id }}"
                                data-category="{{ item.item.category }}"
-                               onchange="updateQuantity({{ item.id }}, this.value)">
+                               data-cost="{{ item.item.cost_price }}"
+                               data-stock="{% if order.status in 'processing,paid,pickup,completed' %}{{ item.quantity|add:item.item.current_stock }}{% else %}{{ item.item.current_stock }}{% endif %}"
+                               data-original-qty="{{ item.quantity }}">
                     </div>
                     <div class="text-right">
                         <p class="text-xs text-gray-500 mb-1">Subtotal</p>
@@ -280,18 +293,14 @@
                         </p>
                     </div>
                     <div>
-                        <form method="post" class="remove-item-form" data-item-name="{{ item.item.name }}">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="remove_item">
-                            <input type="hidden" name="item_id" value="{{ item.id }}">
-                            <button type="submit" class="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition mt-2"
-                                    title="Remove {{ item.item.name }}"
-                                    onclick="return confirm('Remove {{ item.item.name }} from this order?')">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                            </button>
-                        </form>
+                        <button type="button" class="remove-item-btn text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition mt-2"
+                                title="Remove {{ item.item.name }}"
+                                data-order-item-id="{{ item.id }}"
+                                data-item-name="{{ item.item.name }}">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -405,93 +414,12 @@
 <!-- Bottom Section: Actions & Payment Proof -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
     <!-- Actions -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div id="actions-panel" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
             <span class="mr-2">⚙️</span> Actions
         </h2>
-        
-        {% if order.status == 'pending_approval' %}
-        <form method="post" class="space-y-4">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="approve">
-            
-            {% if order.bundle_type == 'custom' %}
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Set Price (JMD) <span class="text-red-500">*</span></label>
-                <input type="number" name="new_price" value="{{ suggested_price }}" required
-                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
-            </div>
-            {% endif %}
-            
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Notes to Customer</label>
-                <textarea name="admin_notes" rows="2" 
-                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                          placeholder="Optional message for the customer...">{{ order.admin_notes }}</textarea>
-            </div>
-            
-            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-base">
-                ✓ Approve Order
-            </button>
-        </form>
-        
-        {% elif order.status == 'payment_uploaded' %}
-        <form method="post" class="space-y-3">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="verify_payment">
-            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-teal-500 text-white font-bold rounded-lg hover:bg-teal-600 transition text-base">
-                ✓ Verify Payment
-            </button>
-        </form>
-        
-        {% elif order.status == 'payment_verified' %}
-        <form method="post" class="space-y-3">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="mark_processing">
-            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition text-base">
-                📦 Mark as Processing
-            </button>
-        </form>
-        
-        {% elif order.status == 'processing' %}
-        <form method="post" class="space-y-3">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="mark_completed">
-            <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-base">
-                🎉 Mark as Completed
-            </button>
-        </form>
-        {% endif %}
-        
-        {% if order.status not in 'completed,cancelled' %}
-        <div class="mt-6 pt-4 border-t border-gray-200">
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="cancel">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Cancel Order</label>
-                <textarea name="admin_notes" rows="3" 
-                          class="w-full px-4 py-3 border border-gray-300 rounded-lg mb-2 text-base"
-                          placeholder="Reason for cancellation..."></textarea>
-                <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 transition text-base"
-                        onclick="return confirm('Are you sure you want to cancel this order?')">
-                    Cancel Order
-                </button>
-            </form>
-        </div>
-        {% endif %}
-        
-        <!-- Delete Order (Danger Zone) -->
-        <div class="mt-6 pt-4 border-t-2 border-red-200">
-            <p class="text-xs text-red-600 font-semibold uppercase mb-2">Danger Zone</p>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="delete">
-                <button type="submit" class="w-full px-4 py-3 min-h-[44px] bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition text-base"
-                        onclick="return confirm('⚠️ WARNING: This will PERMANENTLY DELETE this order and all its items. This action cannot be undone!\n\nAre you absolutely sure you want to delete order {{ order.order_reference }}?')">
-                    🗑️ Delete Order Permanently
-                </button>
-            </form>
-            <p class="text-xs text-red-500 mt-2 text-center">This action cannot be undone!</p>
+        <div id="actions-panel-inner">
+            {% include "admin/_order_actions_inner.html" %}
         </div>
     </div>
     
@@ -523,10 +451,43 @@
 </div>
 {% endif %}
 
+<!-- Remove Item Modal -->
+<div id="remove-item-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+    <div class="fixed inset-0 bg-black/50 transition-opacity" id="remove-modal-backdrop"></div>
+    <div class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md mx-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-6">
+            <div class="flex items-center gap-4 mb-4">
+                <div class="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">Remove item?</h3>
+                    <p id="remove-modal-item-name" class="text-gray-600">—</p>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 mb-6">
+                Remove <strong id="remove-modal-item-name-inline">—</strong> from this order? This cannot be undone.
+            </p>
+            <div id="remove-modal-saving" class="hidden text-sm text-orange-600 mb-4">
+                Saving changes first…
+            </div>
+            <div id="remove-modal-error" class="hidden text-sm text-red-600 mb-4"></div>
+            <div class="flex gap-3">
+                <button type="button" id="remove-modal-cancel" class="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button type="button" id="remove-modal-confirm" class="flex-1 px-4 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition">
+                    Remove
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const quantityInputs = document.querySelectorAll('.quantity-input');
-    const updateBtn = document.getElementById('update-btn');
     const validationMsg = document.getElementById('validation-message');
     const currentSnacksEl = document.getElementById('current-snacks');
     const currentJuicesEl = document.getElementById('current-juices');
@@ -540,11 +501,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Category tab elements
     const categoryTabs = document.querySelectorAll('.category-tab');
     const itemRows = document.querySelectorAll('.item-row');
-    const itemRowCards = document.querySelectorAll('.item-row-card'); // Mobile card view
+    const itemRowCards = document.querySelectorAll('.item-row-card');
     const snackCountBadge = document.getElementById('snack-count-badge');
     const juiceCountBadge = document.getElementById('juice-count-badge');
     
-    // Get revenue from the page (from order.total_revenue)
+    // Get revenue from the page
     const revenue = parseFloat('{{ order.total_revenue|default:0 }}') || 0;
     
     {% if bundle_requirements %}
@@ -555,9 +516,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const requiredJuices = 0;
     {% endif %}
     
+    // Track if there are unsaved changes
+    let hasUnsavedChanges = false;
+    const saveBtn = document.getElementById('save-changes-btn');
+    const saveStatusEl = document.getElementById('save-status');
+    const saveStatusText = document.getElementById('save-status-text');
+    
     // Category tab switching
     function switchCategory(category) {
-        // Update tab styles
         categoryTabs.forEach(tab => {
             const tabCategory = tab.dataset.category;
             if (tabCategory === category) {
@@ -575,76 +541,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Show/hide table rows (desktop)
         itemRows.forEach(row => {
             const rowCategory = row.dataset.category;
-            if (category === 'all') {
-                row.style.display = '';
-            } else if (rowCategory === category) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
+            row.style.display = (category === 'all' || rowCategory === category) ? '' : 'none';
         });
         
-        // Show/hide card rows (mobile)
         itemRowCards.forEach(card => {
             const cardCategory = card.dataset.category;
-            if (category === 'all') {
-                card.style.display = '';
-            } else if (cardCategory === category) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
+            card.style.display = (category === 'all' || cardCategory === category) ? '' : 'none';
         });
     }
     
-    // Add event listeners to category tabs
     categoryTabs.forEach(tab => {
         tab.addEventListener('click', function() {
             switchCategory(this.dataset.category);
         });
     });
     
-    // Count items by category and update badges
     function updateCategoryBadges() {
-        let snackCount = 0;
-        let juiceCount = 0;
-        
-        // Count table rows (desktop)
+        let snackCount = 0, juiceCount = 0;
         itemRows.forEach(row => {
-            const category = row.dataset.category;
-            if (category === 'snack') snackCount++;
-            if (category === 'juice') juiceCount++;
+            if (row.dataset.category === 'snack') snackCount++;
+            if (row.dataset.category === 'juice') juiceCount++;
         });
-        
-        // Count card rows (mobile) - only if table rows don't exist
-        if (itemRows.length === 0 && itemRowCards.length > 0) {
+        if (itemRows.length === 0) {
             itemRowCards.forEach(card => {
-                const category = card.dataset.category;
-                if (category === 'snack') snackCount++;
-                if (category === 'juice') juiceCount++;
+                if (card.dataset.category === 'snack') snackCount++;
+                if (card.dataset.category === 'juice') juiceCount++;
             });
         }
-        
-        if (snackCountBadge) {
-            snackCountBadge.textContent = snackCount;
-        }
-        if (juiceCountBadge) {
-            juiceCountBadge.textContent = juiceCount;
-        }
+        if (snackCountBadge) snackCountBadge.textContent = snackCount;
+        if (juiceCountBadge) juiceCountBadge.textContent = juiceCount;
     }
-    
-    // Initialize category badges
     updateCategoryBadges();
     
-    // Set initial tab to "Snacks" if there are snacks, otherwise "All"
     const snackRows = document.querySelectorAll('.item-row[data-category="snack"], .item-row-card[data-category="snack"]');
-    if (snackRows.length > 0) {
-        switchCategory('snack');
-    } else {
-        switchCategory('all');
+    switchCategory(snackRows.length > 0 ? 'snack' : 'all');
+    
+    // Get unique quantity inputs (desktop and mobile may share same name)
+    function getUniqueQuantityInputs() {
+        const seen = {};
+        const result = [];
+        document.querySelectorAll('.quantity-input').forEach(input => {
+            const id = input.dataset.itemId;
+            if (id && !seen[id]) {
+                seen[id] = true;
+                result.push(input);
+            }
+        });
+        return result;
     }
     
     function calculateTotals() {
@@ -652,19 +597,17 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalJuices = 0;
         let totalCost = 0;
         
-        quantityInputs.forEach(input => {
+        getUniqueQuantityInputs().forEach(input => {
             const qty = parseInt(input.value) || 0;
             const category = input.dataset.category;
-            const row = input.closest('tr');
-            const costCell = row.querySelector('[data-cost]');
-            const cost = parseFloat(costCell.dataset.cost) || 0;
+            const cost = parseFloat(input.dataset.cost) || 0;
             const subtotal = qty * cost;
+            const itemId = input.dataset.itemId;
             
-            // Update subtotal display
-            const subtotalCell = row.querySelector('.item-subtotal');
-            if (subtotalCell) {
-                subtotalCell.textContent = '$' + subtotal.toFixed(2);
-            }
+            // Update subtotal displays (both desktop and mobile)
+            document.querySelectorAll(`.item-subtotal[data-item-id="${itemId}"]`).forEach(el => {
+                el.textContent = '$' + subtotal.toFixed(2);
+            });
             
             if (category === 'snack') {
                 totalSnacks += qty;
@@ -674,32 +617,26 @@ document.addEventListener('DOMContentLoaded', function() {
             totalCost += subtotal;
         });
         
-        // Update financial displays
-        if (financialCostEl) {
-            financialCostEl.textContent = '$' + totalCost.toFixed(2);
-        }
-        if (headerTotalCostEl) {
-            headerTotalCostEl.textContent = '$' + totalCost.toFixed(2);
-        }
+        // Update all cost displays
+        if (financialCostEl) financialCostEl.textContent = '$' + totalCost.toFixed(2);
+        if (headerTotalCostEl) headerTotalCostEl.textContent = '$' + totalCost.toFixed(2);
         
-        // Calculate profit and margin
-        let profit = revenue - totalCost;
-        let margin = revenue > 0 ? (profit / revenue * 100) : 0;
+        // Calculate and update profit and margin
+        const profit = revenue - totalCost;
+        const margin = revenue > 0 ? (profit / revenue * 100) : 0;
         
-        // Update profit display
         if (financialProfitEl) {
             if (revenue > 0) {
                 financialProfitEl.textContent = '$' + profit.toFixed(2);
-                financialProfitEl.className = profit > 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-gray-400';
+                financialProfitEl.className = profit > 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-red-600';
             } else {
                 financialProfitEl.textContent = '-';
                 financialProfitEl.className = 'text-xl font-bold text-gray-400';
             }
         }
         
-        // Update margin display
         if (financialMarginEl) {
-            if (revenue > 0 && margin > 0) {
+            if (revenue > 0) {
                 financialMarginEl.textContent = margin.toFixed(1) + '%';
                 financialMarginEl.className = margin >= 38 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-orange-600';
             } else {
@@ -708,20 +645,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Update current totals display (for bundle requirements)
+        // Update Required Snacks / Juices counters
         if (currentSnacksEl) {
             currentSnacksEl.textContent = totalSnacks;
-            currentSnacksEl.className = totalSnacks === requiredSnacks ? 'text-green-600' : 'text-orange-600';
+            currentSnacksEl.className = (requiredSnacks === 0 || totalSnacks === requiredSnacks) ? 'text-green-600' : 'text-orange-600';
         }
         if (currentJuicesEl) {
             currentJuicesEl.textContent = totalJuices;
-            currentJuicesEl.className = totalJuices === requiredJuices ? 'text-green-600' : 'text-orange-600';
+            currentJuicesEl.className = (requiredJuices === 0 || totalJuices === requiredJuices) ? 'text-green-600' : 'text-orange-600';
         }
         
-        // Validate totals (only if bundle requirements exist)
+        // Validation message
         let isValid = true;
         let errors = [];
-        
         if (requiredSnacks > 0 && totalSnacks !== requiredSnacks) {
             isValid = false;
             errors.push(`Snacks: ${totalSnacks} / ${requiredSnacks} required`);
@@ -731,7 +667,6 @@ document.addEventListener('DOMContentLoaded', function() {
             errors.push(`Juices: ${totalJuices} / ${requiredJuices} required`);
         }
         
-        // Show validation message (only if bundle requirements exist)
         if (validationMsg && (requiredSnacks > 0 || requiredJuices > 0)) {
             if (!isValid) {
                 validationMsg.className = 'mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800';
@@ -744,65 +679,291 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Enable/disable submit button (only if bundle requirements exist)
-        if (updateBtn && (requiredSnacks > 0 || requiredJuices > 0)) {
-            if (!isValid) {
-                updateBtn.disabled = true;
-                updateBtn.className = 'w-full px-6 py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm';
-            } else {
-                updateBtn.disabled = false;
-                updateBtn.className = 'w-full px-6 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition text-sm';
-            }
-        }
-        
-        return isValid;
+        return { isValid, totalSnacks, totalJuices, totalCost, profit, margin };
     }
     
-    // Add event listeners to all quantity inputs
-    quantityInputs.forEach(input => {
-        input.addEventListener('input', calculateTotals);
-        input.addEventListener('change', calculateTotals);
-    });
+    // Show/hide save button based on changes
+    function markAsChanged() {
+        hasUnsavedChanges = true;
+        if (saveBtn) {
+            saveBtn.classList.remove('hidden');
+            saveBtn.textContent = '💾 Save Changes';
+            saveBtn.disabled = false;
+            saveBtn.className = 'px-4 py-2 min-h-[44px] bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition text-sm';
+        }
+        if (saveStatusEl) saveStatusEl.classList.add('hidden');
+    }
     
-    // Initial calculation
-    calculateTotals();
-    
-    // Auto-update quantity when changed
-    function updateQuantity(itemId, newQuantity) {
-        const qty = parseInt(newQuantity) || 0;
-        if (qty < 0) {
-            alert('Quantity cannot be negative.');
-            return;
+    // Save changes via AJAX (no page reload)
+    function saveChanges() {
+        if (!hasUnsavedChanges) return;
+        
+        // Update button to show saving state
+        if (saveBtn) {
+            saveBtn.textContent = '⏳ Saving...';
+            saveBtn.disabled = true;
+            saveBtn.className = 'px-4 py-2 min-h-[44px] bg-gray-400 text-white font-semibold rounded-lg cursor-wait text-sm';
         }
         
-        // Create a form and submit it
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = window.location.href;
-        
+        // Build form data
+        const formData = new FormData();
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
         if (csrfToken) {
-            const csrfInput = document.createElement('input');
-            csrfInput.type = 'hidden';
-            csrfInput.name = 'csrfmiddlewaretoken';
-            csrfInput.value = csrfToken.value;
-            form.appendChild(csrfInput);
+            formData.append('csrfmiddlewaretoken', csrfToken.value);
         }
+        formData.append('action', 'update_items_ajax');
         
-        const actionInput = document.createElement('input');
-        actionInput.type = 'hidden';
-        actionInput.name = 'action';
-        actionInput.value = 'update_items';
-        form.appendChild(actionInput);
+        getUniqueQuantityInputs().forEach(input => {
+            formData.append(input.name, input.value);
+        });
         
-        const qtyInput = document.createElement('input');
-        qtyInput.type = 'hidden';
-        qtyInput.name = 'qty_' + itemId;
-        qtyInput.value = qty;
-        form.appendChild(qtyInput);
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            hasUnsavedChanges = false;
+            if (data.success) {
+                // Show success message
+                if (saveStatusEl && saveStatusText) {
+                    saveStatusText.textContent = '✅ Saved!';
+                    saveStatusText.className = 'inline-block text-green-600 font-semibold';
+                    saveStatusEl.classList.remove('hidden');
+                }
+                if (saveBtn) saveBtn.classList.add('hidden');
+                
+                // Update displayed totals from server response
+                if (data.total_cost !== undefined && financialCostEl) {
+                    financialCostEl.textContent = '$' + parseFloat(data.total_cost).toFixed(2);
+                }
+                if (data.net_profit !== undefined && financialProfitEl) {
+                    const profit = parseFloat(data.net_profit);
+                    financialProfitEl.textContent = '$' + profit.toFixed(2);
+                    financialProfitEl.className = profit > 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-red-600';
+                }
+                if (data.profit_margin !== undefined && financialMarginEl) {
+                    const margin = parseFloat(data.profit_margin);
+                    financialMarginEl.textContent = margin.toFixed(1) + '%';
+                    financialMarginEl.className = margin >= 38 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-orange-600';
+                }
+                
+                // Hide success message after 3 seconds
+                setTimeout(() => {
+                    if (saveStatusEl) saveStatusEl.classList.add('hidden');
+                }, 3000);
+            } else {
+                // Show error
+                if (saveStatusEl && saveStatusText) {
+                    saveStatusText.textContent = '❌ ' + (data.error || 'Save failed');
+                    saveStatusText.className = 'inline-block text-red-600 font-semibold';
+                    saveStatusEl.classList.remove('hidden');
+                }
+                if (saveBtn) {
+                    saveBtn.textContent = '💾 Retry Save';
+                    saveBtn.disabled = false;
+                    saveBtn.className = 'px-4 py-2 min-h-[44px] bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition text-sm';
+                    saveBtn.classList.remove('hidden');
+                }
+                hasUnsavedChanges = true;
+            }
+        })
+        .catch(error => {
+            console.error('Save error:', error);
+            if (saveStatusEl && saveStatusText) {
+                saveStatusText.textContent = '❌ Network error';
+                saveStatusText.className = 'inline-block text-red-600 font-semibold';
+                saveStatusEl.classList.remove('hidden');
+            }
+            if (saveBtn) {
+                saveBtn.textContent = '💾 Retry Save';
+                saveBtn.disabled = false;
+                saveBtn.className = 'px-4 py-2 min-h-[44px] bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition text-sm';
+                saveBtn.classList.remove('hidden');
+            }
+            hasUnsavedChanges = true;
+        });
+    }
+    
+    // Expose for button onclick
+    window.saveChanges = saveChanges;
+    
+    // Perform save via AJAX (returns Promise). Used before remove when there are unsaved changes.
+    function performSave() {
+        const formData = new FormData();
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrf) formData.append('csrfmiddlewaretoken', csrf.value);
+        formData.append('action', 'update_items_ajax');
+        getUniqueQuantityInputs().forEach(input => { formData.append(input.name, input.value); });
+        return fetch(window.location.href, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Save failed');
+                hasUnsavedChanges = false;
+                if (financialCostEl) financialCostEl.textContent = '$' + parseFloat(data.total_cost).toFixed(2);
+                if (headerTotalCostEl) headerTotalCostEl.textContent = '$' + parseFloat(data.total_cost).toFixed(2);
+                if (financialProfitEl) {
+                    const p = parseFloat(data.net_profit);
+                    financialProfitEl.textContent = '$' + p.toFixed(2);
+                    financialProfitEl.className = p > 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-red-600';
+                }
+                if (financialMarginEl) {
+                    const m = parseFloat(data.profit_margin);
+                    financialMarginEl.textContent = m.toFixed(1) + '%';
+                    financialMarginEl.className = m >= 38 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-orange-600';
+                }
+                return data;
+            });
+    }
+    
+    // Sync inputs (desktop <-> mobile share same name, keep values in sync)
+    function syncInputs(changedInput) {
+        const name = changedInput.name;
+        const value = changedInput.value;
+        document.querySelectorAll(`input[name="${name}"]`).forEach(input => {
+            if (input !== changedInput) {
+                input.value = value;
+            }
+        });
+    }
+    
+    // Check stock limits and show warning
+    function checkStockLimit(input) {
+        const stock = parseInt(input.dataset.stock) || 999;
+        const value = parseInt(input.value) || 0;
         
-        document.body.appendChild(form);
-        form.submit();
+        if (value > stock) {
+            input.classList.add('border-red-500', 'bg-red-50');
+            input.classList.remove('border-gray-300');
+            // Show warning tooltip
+            let warning = input.parentElement.querySelector('.stock-warning');
+            if (!warning) {
+                warning = document.createElement('span');
+                warning.className = 'stock-warning text-xs text-red-600 block mt-1';
+                input.parentElement.appendChild(warning);
+            }
+            warning.textContent = `⚠️ Max: ${stock}`;
+            return false;
+        } else {
+            input.classList.remove('border-red-500', 'bg-red-50');
+            input.classList.add('border-gray-300');
+            const warning = input.parentElement.querySelector('.stock-warning');
+            if (warning) warning.remove();
+            return true;
+        }
+    }
+    
+    // Attach event listeners to all quantity inputs
+    document.querySelectorAll('.quantity-input').forEach(input => {
+        input.addEventListener('input', function() {
+            checkStockLimit(this);
+            syncInputs(this);
+            calculateTotals();
+            markAsChanged();
+        });
+        // Check on page load too
+        checkStockLimit(input);
+    });
+    
+    // Initial calculation on page load
+    calculateTotals();
+    
+    // Warn before leaving with unsaved changes
+    window.addEventListener('beforeunload', function(e) {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+    
+    // Action buttons (Start Processing, Confirm Payment, Mark Pickup, Mark Completed) via AJAX – no refresh
+    const actionsPanel = document.getElementById('actions-panel');
+    const actionsPanelInner = document.getElementById('actions-panel-inner');
+    const orderStatusBadge = document.getElementById('order-status-badge');
+    
+    if (actionsPanel) {
+        let actionSubmitInProgress = false;
+        actionsPanel.addEventListener('submit', async function(e) {
+            const form = e.target;
+            if (!form || !form.classList.contains('action-form-ajax')) return;
+            if (actionSubmitInProgress) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            actionSubmitInProgress = true;
+            const btn = form.querySelector('button[type="submit"]');
+            if (btn) btn.disabled = true;
+            const formData = new FormData(form);
+            try {
+                const res = await fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (_) {
+                    if (actionsPanelInner) {
+                        const el = document.createElement('div');
+                        el.className = 'mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm';
+                        el.textContent = 'The server returned an unexpected response. Please refresh the page and try again.';
+                        actionsPanelInner.insertBefore(el, actionsPanelInner.firstChild);
+                        setTimeout(function() { el.remove(); }, 6000);
+                    }
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+                if (!data.success) {
+                    if (actionsPanelInner) {
+                        const err = document.createElement('div');
+                        err.className = 'mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm';
+                        err.textContent = data.error || data.message || 'Action failed';
+                        actionsPanelInner.insertBefore(err, actionsPanelInner.firstChild);
+                        setTimeout(function() { err.remove(); }, 5000);
+                    }
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+                if (orderStatusBadge) {
+                    orderStatusBadge.textContent = data.new_status_display;
+                    orderStatusBadge.className = data.status_badge_class || orderStatusBadge.className;
+                }
+                if (actionsPanelInner && data.actions_html) {
+                    actionsPanelInner.innerHTML = data.actions_html;
+                }
+                if (data.message && actionsPanelInner) {
+                    const ok = document.createElement('div');
+                    ok.className = 'mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm font-medium';
+                    ok.textContent = '✓ ' + data.message;
+                    actionsPanelInner.insertBefore(ok, actionsPanelInner.firstChild);
+                    setTimeout(function() { ok.remove(); }, 4000);
+                }
+                if (data.warnings && data.warnings.length > 0 && actionsPanelInner) {
+                    const warn = document.createElement('div');
+                    warn.className = 'mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm';
+                    warn.textContent = '⚠ ' + data.warnings.join('; ');
+                    actionsPanelInner.insertBefore(warn, actionsPanelInner.firstChild);
+                    setTimeout(function() { warn.remove(); }, 6000);
+                }
+            } catch (err) {
+                if (actionsPanelInner) {
+                    const el = document.createElement('div');
+                    el.className = 'mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm';
+                    el.textContent = 'Network error. Please try again.';
+                    actionsPanelInner.insertBefore(el, actionsPanelInner.firstChild);
+                    setTimeout(function() { el.remove(); }, 5000);
+                }
+                if (btn) btn.disabled = false;
+            } finally {
+                actionSubmitInProgress = false;
+            }
+        });
     }
     
     // Add Items Form - Show/hide quantity inputs when checkboxes are checked
@@ -839,6 +1000,118 @@ document.addEventListener('DOMContentLoaded', function() {
     if (checkedBoxes.length === 0 && addItemsBtn) {
         addItemsBtn.disabled = true;
         addItemsBtn.className = 'w-full mt-4 px-6 py-3 min-h-[44px] bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm';
+    }
+    
+    // Remove Item Modal
+    let removeModalOrderItemId = null;
+    let removeModalItemName = null;
+    const removeModal = document.getElementById('remove-item-modal');
+    const removeModalBackdrop = document.getElementById('remove-modal-backdrop');
+    const removeModalConfirm = document.getElementById('remove-modal-confirm');
+    const removeModalCancel = document.getElementById('remove-modal-cancel');
+    const removeModalSaving = document.getElementById('remove-modal-saving');
+    const removeModalError = document.getElementById('remove-modal-error');
+    
+    function openRemoveModal(orderItemId, itemName) {
+        removeModalOrderItemId = orderItemId;
+        removeModalItemName = itemName;
+        document.getElementById('remove-modal-item-name').textContent = itemName;
+        document.getElementById('remove-modal-item-name-inline').textContent = itemName;
+        removeModalError.classList.add('hidden');
+        removeModalError.textContent = '';
+        removeModalSaving.classList.add('hidden');
+        removeModal.classList.remove('hidden');
+    }
+    
+    function closeRemoveModal() {
+        removeModal.classList.add('hidden');
+        removeModalOrderItemId = null;
+        removeModalItemName = null;
+    }
+    
+    document.querySelectorAll('.remove-item-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            openRemoveModal(this.dataset.orderItemId, this.dataset.itemName || 'this item');
+        });
+    });
+    
+    if (removeModalCancel) removeModalCancel.addEventListener('click', closeRemoveModal);
+    if (removeModalBackdrop) removeModalBackdrop.addEventListener('click', closeRemoveModal);
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && removeModal && !removeModal.classList.contains('hidden')) closeRemoveModal();
+    });
+    
+    if (removeModalConfirm) {
+        removeModalConfirm.addEventListener('click', async function() {
+            const id = removeModalOrderItemId;
+            if (!id) return;
+            removeModalCancel.disabled = true;
+            removeModalConfirm.disabled = true;
+            removeModalError.classList.add('hidden');
+            removeModalError.textContent = '';
+            try {
+                if (hasUnsavedChanges) {
+                    removeModalSaving.classList.remove('hidden');
+                    await performSave();
+                    removeModalSaving.classList.add('hidden');
+                }
+                const formData = new FormData();
+                const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrf) formData.append('csrfmiddlewaretoken', csrf.value);
+                formData.append('action', 'remove_item_ajax');
+                formData.append('item_id', id);
+                const res = await fetch(window.location.href, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await res.json();
+                if (!data.success) {
+                    removeModalError.textContent = data.error || 'Failed to remove item';
+                    removeModalError.classList.remove('hidden');
+                    return;
+                }
+                document.querySelectorAll('tr[data-order-item-id="' + id + '"]').forEach(el => el.remove());
+                document.querySelectorAll('.item-row-card[data-order-item-id="' + id + '"]').forEach(el => el.remove());
+                if (financialCostEl) financialCostEl.textContent = '$' + parseFloat(data.total_cost).toFixed(2);
+                if (headerTotalCostEl) headerTotalCostEl.textContent = '$' + parseFloat(data.total_cost).toFixed(2);
+                if (financialProfitEl) {
+                    const p = parseFloat(data.net_profit);
+                    financialProfitEl.textContent = '$' + p.toFixed(2);
+                    financialProfitEl.className = p > 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-red-600';
+                }
+                if (financialMarginEl) {
+                    const m = parseFloat(data.profit_margin);
+                    financialMarginEl.textContent = m.toFixed(1) + '%';
+                    financialMarginEl.className = m >= 38 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-orange-600';
+                }
+                if (currentSnacksEl) {
+                    currentSnacksEl.textContent = data.current_snacks;
+                    currentSnacksEl.className = (requiredSnacks === 0 || data.current_snacks === requiredSnacks) ? 'text-green-600' : 'text-orange-600';
+                }
+                if (currentJuicesEl) {
+                    currentJuicesEl.textContent = data.current_juices;
+                    currentJuicesEl.className = (requiredJuices === 0 || data.current_juices === requiredJuices) ? 'text-green-600' : 'text-orange-600';
+                }
+                if (validationMsg && (requiredSnacks > 0 || requiredJuices > 0)) {
+                    let isValid = true, errs = [];
+                    if (requiredSnacks > 0 && data.current_snacks !== requiredSnacks) { isValid = false; errs.push('Snacks: ' + data.current_snacks + ' / ' + requiredSnacks + ' required'); }
+                    if (requiredJuices > 0 && data.current_juices !== requiredJuices) { isValid = false; errs.push('Juices: ' + data.current_juices + ' / ' + requiredJuices + ' required'); }
+                    if (!isValid) {
+                        validationMsg.className = 'mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800';
+                        validationMsg.innerHTML = '<strong>⚠️ Invalid Totals:</strong> ' + errs.join(', ');
+                    } else {
+                        validationMsg.className = 'mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800';
+                        validationMsg.innerHTML = '<strong>✓ Totals Match Requirements</strong>';
+                    }
+                    validationMsg.classList.remove('hidden');
+                }
+                updateCategoryBadges();
+                closeRemoveModal();
+            } catch (e) {
+                removeModalError.textContent = e.message || 'Network error';
+                removeModalError.classList.remove('hidden');
+            } finally {
+                removeModalCancel.disabled = false;
+                removeModalConfirm.disabled = false;
+            }
+        });
     }
 });
 </script>

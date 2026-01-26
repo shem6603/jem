@@ -13,10 +13,19 @@ from django.core.validators import validate_email
 from django.http import JsonResponse
 from django.db import transaction
 from django.utils import timezone
+from django.template.loader import render_to_string
 from django.conf import settings
 from decimal import Decimal, InvalidOperation
 import time
 from collections import defaultdict
+
+def _order_status_badge_class(status):
+    m = {'pending_approval': 'bg-yellow-100 text-yellow-800', 'approved': 'bg-blue-100 text-blue-800',
+         'processing': 'bg-orange-100 text-orange-800', 'paid': 'bg-green-100 text-green-800',
+         'pickup': 'bg-purple-100 text-purple-800', 'completed': 'bg-green-500 text-white',
+         'cancelled': 'bg-red-100 text-red-800'}
+    return 'px-4 py-2 text-lg font-bold rounded-lg ' + m.get(status, 'bg-gray-100 text-gray-800')
+
 
 # Rate limiting storage (in production, use Redis or database)
 _login_attempts = defaultdict(list)
@@ -193,27 +202,27 @@ def admin_dashboard(request):
 @login_required
 @user_passes_test(is_staff_user, login_url='admin_login')
 def admin_order_records(request):
-    """Order records page"""
+    """Order records page - only shows COMPLETED orders"""
     from .models import Order, CustomerOrder
     from django.db.models import Sum
     
-    # Get all admin orders (Order model)
-    admin_orders = Order.objects.select_related('customer', 'bundle_type').order_by('-created_at')
+    # Get only COMPLETED admin orders (Order model)
+    admin_orders = Order.objects.filter(status='completed').select_related('customer', 'bundle_type').order_by('-created_at')
     
-    # Calculate totals from admin orders
+    # Calculate totals from completed admin orders only
     admin_revenue = admin_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
     admin_cost = admin_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
     admin_profit = admin_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
     
-    # Get all customer orders (CustomerOrder model)
-    customer_orders = CustomerOrder.objects.all().order_by('-created_at')
+    # Get only COMPLETED customer orders (CustomerOrder model)
+    customer_orders = CustomerOrder.objects.filter(status='completed').order_by('-created_at')
     
-    # Calculate totals from customer orders
+    # Calculate totals from completed customer orders only
     customer_revenue = customer_orders.aggregate(Sum('total_revenue'))['total_revenue__sum'] or Decimal('0.00')
     customer_cost = customer_orders.aggregate(Sum('total_cost'))['total_cost__sum'] or Decimal('0.00')
     customer_profit = customer_orders.aggregate(Sum('net_profit'))['net_profit__sum'] or Decimal('0.00')
     
-    # Combine totals from both order types
+    # Combine totals from both order types (completed only)
     total_revenue = admin_revenue + customer_revenue
     total_cost = admin_cost + customer_cost
     total_profit = admin_profit + customer_profit
@@ -1432,15 +1441,17 @@ def admin_customer_orders(request):
     if status_filter:
         orders = orders.filter(status=status_filter)
     
-    # Calculate totals
+    # Calculate totals for quick filters
     pending_count = CustomerOrder.objects.filter(status='pending_approval').count()
-    payment_uploaded_count = CustomerOrder.objects.filter(status='payment_uploaded').count()
+    processing_count = CustomerOrder.objects.filter(status='processing').count()
+    pickup_count = CustomerOrder.objects.filter(status='pickup').count()
     
     context = {
         'orders': orders,
         'status_filter': status_filter,
         'pending_count': pending_count,
-        'payment_uploaded_count': payment_uploaded_count,
+        'processing_count': processing_count,
+        'pickup_count': pickup_count,
         'status_choices': CustomerOrder.STATUS_CHOICES,
     }
     return render(request, 'admin/customer_orders.html', context)
@@ -1492,108 +1503,147 @@ def admin_customer_order_detail(request, order_id):
                     price_decimal = order.total_revenue
                 
                 if price_decimal:
-                    # Validate that price achieves at least 38% margin
+                    order.total_revenue = price_decimal
+                    order.net_profit = order.total_revenue - order.total_cost
+                    if order.total_revenue > 0:
+                        order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                    
+                    # Warn (but don't block) if margin is below 38%
                     if price_decimal < min_price:
-                        messages.error(request, f'Price must be at least ${min_price:.0f} JMD to achieve 38% margin. Current price (${price_decimal:.0f}) would result in {(price_decimal - order.total_cost) / price_decimal * 100:.1f}% margin.')
-                        # Don't redirect, show error and stay on page
-                    else:
-                        order.total_revenue = price_decimal
-                        order.net_profit = order.total_revenue - order.total_cost
-                        if order.total_revenue > 0:
-                            order.profit_margin = (order.net_profit / order.total_revenue) * 100
-                        
-                        order.status = 'approved'
-                        order.admin_notes = admin_notes
-                        order.approved_at = timezone.now()
-                        order.approved_by = request.user
-                        # Set 24-hour payment deadline
-                        from datetime import timedelta
-                        order.payment_deadline = timezone.now() + timedelta(hours=24)
-                        order.save()
-                        
-                        # Send email notifications
-                        try:
-                            from .email_utils import send_order_status_update
-                            send_order_status_update(order, 'pending_approval', 'approved')
-                        except Exception as e:
-                            print(f"Error sending approval email: {e}")
-                        
-                        messages.success(request, f'Order {order.order_reference} approved with {order.profit_margin:.1f}% margin!')
-                        return redirect('admin_customer_orders')
+                        actual_margin = (price_decimal - order.total_cost) / price_decimal * 100
+                        messages.warning(request, f'Note: This price (${price_decimal:.0f}) results in {actual_margin:.1f}% margin (below 38% target).')
+                    
+                    order.status = 'approved'
+                    order.admin_notes = admin_notes
+                    order.approved_at = timezone.now()
+                    order.approved_by = request.user
+                    # Set 24-hour payment deadline
+                    from datetime import timedelta
+                    order.payment_deadline = timezone.now() + timedelta(hours=24)
+                    order.save()
+                    
+                    # Send email notifications
+                    try:
+                        from .email_utils import send_order_status_update
+                        send_order_status_update(order, 'pending_approval', 'approved')
+                    except Exception as e:
+                        print(f"Error sending approval email: {e}")
+                    
+                    messages.success(request, f'Order {order.order_reference} approved with {order.profit_margin:.1f}% margin!')
+                    return redirect('admin_customer_orders')
         
-        elif action == 'verify_payment':
-            # Only reduce inventory if it hasn't been reduced yet
-            # Check if order was previously in a status that would have reduced inventory
+        elif action == 'mark_processing':
+            # Move to processing and DEDUCT INVENTORY
             previous_status = order.status
-            order.status = 'payment_verified'
-            order.save()
             
-            # Reduce inventory when payment is verified (order is confirmed)
-            # Only reduce if we're moving from a status that hasn't reduced inventory yet
-            if previous_status not in ['payment_verified', 'processing', 'completed']:
-                # Get all order items and reduce inventory
+            # Only deduct inventory if not already deducted (moving from approved)
+            if previous_status not in ['processing', 'paid', 'pickup', 'completed']:
                 order_items = order.customer_order_items.select_related('item').all()
                 inventory_reduced = []
+                insufficient_stock = []
+                
                 for order_item in order_items:
                     item = order_item.item
                     quantity_to_reduce = order_item.quantity
                     
-                    # Check if we have enough stock
                     if item.current_stock >= quantity_to_reduce:
                         item.current_stock -= quantity_to_reduce
                         item.save()
-                        inventory_reduced.append(f"{order_item.item.name} (-{quantity_to_reduce})")
+                        inventory_reduced.append(f"{item.name} (-{quantity_to_reduce})")
                     else:
-                        # Not enough stock - this shouldn't happen if validation worked, but handle it
-                        messages.warning(
-                            request, 
-                            f'Warning: Insufficient stock for {item.name}. '
-                            f'Required: {quantity_to_reduce}, Available: {item.current_stock}'
+                        insufficient_stock.append(
+                            f'{item.name}: need {quantity_to_reduce}, have {item.current_stock}'
                         )
                 
+                order.status = 'processing'
+                order.save()
+                
                 if inventory_reduced:
-                    messages.success(
-                        request, 
-                        f'Payment for {order.order_reference} verified! '
-                        f'Inventory reduced: {", ".join(inventory_reduced)}'
-                    )
+                    msg = f'Order {order.order_reference} is now processing! Inventory reduced: {", ".join(inventory_reduced[:5])}{"..." if len(inventory_reduced) > 5 else ""}'
                 else:
-                    messages.success(request, f'Payment for {order.order_reference} verified!')
+                    msg = f'Order {order.order_reference} is now processing!'
+                warnings = insufficient_stock
             else:
-                messages.success(request, f'Payment for {order.order_reference} verified!')
+                msg = f'Order {order.order_reference} is already being processed.'
+                warnings = []
             
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                ctx = {'order': order, 'request': request, 'suggested_price': None}
+                return JsonResponse({
+                    'success': True, 'message': msg, 'warnings': warnings,
+                    'new_status': order.status, 'new_status_display': order.get_status_display(),
+                    'status_badge_class': _order_status_badge_class(order.status),
+                    'actions_html': render_to_string('admin/_order_actions_inner.html', ctx),
+                })
+            messages.success(request, msg)
+            for w in warnings:
+                messages.warning(request, f'Insufficient stock: {w}')
             return redirect('admin_customer_orders')
         
-        elif action == 'mark_processing':
-            order.status = 'processing'
+        elif action == 'mark_paid':
+            payment_method = request.POST.get('payment_method', 'cash')
+            order.status = 'paid'
+            order.payment_method = payment_method
+            order.paid_at = timezone.now()
             order.save()
-            messages.success(request, f'Order {order.order_reference} marked as processing.')
+            method_display = dict(CustomerOrder.PAYMENT_METHOD_CHOICES).get(payment_method, payment_method)
+            msg = f'Payment confirmed for {order.order_reference} ({method_display})!'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                ctx = {'order': order, 'request': request, 'suggested_price': None}
+                return JsonResponse({
+                    'success': True, 'message': msg, 'warnings': [],
+                    'new_status': order.status, 'new_status_display': order.get_status_display(),
+                    'status_badge_class': _order_status_badge_class(order.status),
+                    'actions_html': render_to_string('admin/_order_actions_inner.html', ctx),
+                })
+            messages.success(request, msg)
+            return redirect('admin_customer_orders')
+        
+        elif action == 'mark_pickup':
+            order.status = 'pickup'
+            order.save()
+            msg = f'Order {order.order_reference} is ready for pickup!'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                ctx = {'order': order, 'request': request, 'suggested_price': None}
+                return JsonResponse({
+                    'success': True, 'message': msg, 'warnings': [],
+                    'new_status': order.status, 'new_status_display': order.get_status_display(),
+                    'status_badge_class': _order_status_badge_class(order.status),
+                    'actions_html': render_to_string('admin/_order_actions_inner.html', ctx),
+                })
+            messages.success(request, msg)
             return redirect('admin_customer_orders')
         
         elif action == 'mark_completed':
             previous_status = order.status
             order.status = 'completed'
             order.save()
-            
-            # Send email notification
             try:
                 from .email_utils import send_order_status_update
                 send_order_status_update(order, previous_status, 'completed')
             except Exception as e:
                 print(f"Error sending completion email: {e}")
-            
-            messages.success(request, f'Order {order.order_reference} completed!')
+            msg = f'Order {order.order_reference} completed!'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                ctx = {'order': order, 'request': request, 'suggested_price': None}
+                return JsonResponse({
+                    'success': True, 'message': msg, 'warnings': [],
+                    'new_status': order.status, 'new_status_display': order.get_status_display(),
+                    'status_badge_class': _order_status_badge_class(order.status),
+                    'actions_html': render_to_string('admin/_order_actions_inner.html', ctx),
+                })
+            messages.success(request, msg)
             return redirect('admin_customer_orders')
         
         elif action == 'cancel':
-            # Restore inventory if it was previously reduced (order was verified/processing/completed)
+            # Restore inventory if it was previously reduced (processing onwards)
             previous_status = order.status
             order.status = 'cancelled'
             order.admin_notes = request.POST.get('admin_notes', '')
             order.save()
             
-            # Restore inventory if it was previously reduced
-            if previous_status in ['payment_verified', 'processing', 'completed']:
+            # Restore inventory if it was previously reduced (inventory deducted at processing)
+            if previous_status in ['processing', 'paid', 'pickup', 'completed']:
                 order_items = order.customer_order_items.select_related('item').all()
                 inventory_restored = []
                 for order_item in order_items:
@@ -1701,7 +1751,10 @@ def admin_customer_order_detail(request, order_id):
             
             # Update item quantities with security validation
             from .security import validate_integer
-            errors = []
+            item_errors = []
+            
+            # Check if inventory has already been deducted (processing onwards)
+            inventory_deducted = order.status in ['processing', 'paid', 'pickup', 'completed']
             
             for item in order_items:
                 qty_key = f'qty_{item.id}'
@@ -1715,19 +1768,193 @@ def admin_customer_order_detail(request, order_id):
                         allow_zero=True
                     )
                     if not qty_valid:
-                        errors.append(f'{item.item.name}: {qty_error}')
+                        item_errors.append(f'{item.item.name}: {qty_error}')
                         continue
-                    # Use validated integer value directly (already validated above)
+                    if qty_value < 1:
+                        item_errors.append(f'{item.item.name}: quantity must be at least 1 (use Remove to delete the item)')
+                        continue
+                    
+                    # Validate stock availability
+                    if inventory_deducted:
+                        # Inventory already deducted - max is current_stock + what's already in order
+                        max_allowed = item.item.current_stock + item.quantity
+                    else:
+                        # Inventory not yet deducted - max is just current_stock
+                        max_allowed = item.item.current_stock
+                    
+                    if qty_value > max_allowed:
+                        item_errors.append(f'{item.item.name}: Only {max_allowed} units available (requested {qty_value})')
+                        continue
+                    
                     item.quantity = qty_value
                     item.save()
             
-            # Validate totals match bundle requirements (for fixed bundles)
-            if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
-                requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
-                required_snacks = requirements.get('snacks', 0)
-                required_juices = requirements.get('juices', 0)
-                
-                # Calculate current totals
+            if item_errors:
+                for e in item_errors:
+                    messages.error(request, e)
+                order_items = order.customer_order_items.select_related('item')
+            else:
+                # Validate totals match bundle requirements (for fixed bundles)
+                if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                    requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+                    required_snacks = requirements.get('snacks', 0)
+                    required_juices = requirements.get('juices', 0)
+
+                    # Calculate current totals
+                    current_snacks = sum(
+                        oi.quantity for oi in order.customer_order_items.select_related('item')
+                        if oi.item.category == 'snack'
+                    )
+                    current_juices = sum(
+                        oi.quantity for oi in order.customer_order_items.select_related('item')
+                        if oi.item.category == 'juice'
+                    )
+
+                    # Validate totals
+                    errors = []
+                    if required_snacks > 0 and current_snacks != required_snacks:
+                        errors.append(f'Total snacks must equal {required_snacks}. Current: {current_snacks}')
+                    if required_juices > 0 and current_juices != required_juices:
+                        errors.append(f'Total juices must equal {required_juices}. Current: {current_juices}')
+
+                    if errors:
+                        for error in errors:
+                            messages.error(request, error)
+                        # Refresh order items for display
+                        order_items = order.customer_order_items.select_related('item')
+                        target_margin = Decimal(request.session.get('admin_margin_target', '38'))
+                        suggested_price = None
+                        if order.bundle_type == 'custom' and order.total_cost > 0:
+                            margin_factor = Decimal(str(1 - float(target_margin) / 100))
+                            if margin_factor > 0:
+                                suggested_price = int(order.total_cost / margin_factor / 100) * 100 + 100
+                        suggested_profit = None
+                        suggested_margin = None
+                        if suggested_price and order.total_cost > 0:
+                            suggested_profit = Decimal(str(suggested_price)) - order.total_cost
+                            if suggested_price > 0:
+                                suggested_margin = (suggested_profit / Decimal(str(suggested_price))) * 100
+
+                        # Get bundle requirements for validation display
+                        bundle_requirements = None
+                        if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
+                            bundle_requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
+
+                        context = {
+                            'order': order,
+                            'order_items': order_items,
+                            'suggested_price': suggested_price,
+                            'suggested_profit': suggested_profit,
+                            'suggested_margin': suggested_margin,
+                            'target_margin': target_margin,
+                            'bundle_requirements': bundle_requirements,
+                        }
+                        return render(request, 'admin/customer_order_detail.html', context)
+
+                # Recalculate totals
+                order.total_cost = sum(
+                    item.item.cost_price * Decimal(str(item.quantity))
+                    for item in order.customer_order_items.select_related('item')
+                )
+
+                # If revenue is already set, recalculate margin and warn if below 38%
+                if order.total_revenue > 0:
+                    order.net_profit = order.total_revenue - order.total_cost
+                    if order.total_revenue > 0:
+                        order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                        if order.profit_margin < 38:
+                            min_price = order.total_cost / Decimal('0.62')
+                            messages.warning(request, f'Current revenue results in {order.profit_margin:.1f}% margin. Minimum price for 38% margin is ${min_price:.0f} JMD.')
+
+                order.save()
+                messages.success(request, 'Item quantities updated.')
+                # Refresh order_items so the final render shows updated quantities
+                order_items = order.customer_order_items.select_related('item')
+
+        elif action == 'update_items_ajax':
+            # AJAX version - returns JSON instead of page reload
+            from .views import BUNDLE_REQUIREMENTS
+            from .security import validate_integer
+            
+            item_errors = []
+            
+            # Check if inventory has already been deducted (processing onwards)
+            inventory_deducted = order.status in ['processing', 'paid', 'pickup', 'completed']
+            
+            for item in order_items:
+                qty_key = f'qty_{item.id}'
+                new_qty_str = request.POST.get(qty_key, '').strip()
+                if new_qty_str:
+                    qty_valid, qty_value, qty_error = validate_integer(
+                        new_qty_str,
+                        min_value=1,
+                        max_value=10000,
+                        allow_zero=False
+                    )
+                    if not qty_valid:
+                        item_errors.append(f'{item.item.name}: {qty_error}')
+                        continue
+                    
+                    # Validate stock availability
+                    if inventory_deducted:
+                        max_allowed = item.item.current_stock + item.quantity
+                    else:
+                        max_allowed = item.item.current_stock
+                    
+                    if qty_value > max_allowed:
+                        item_errors.append(f'{item.item.name}: Only {max_allowed} available')
+                        continue
+                    
+                    item.quantity = qty_value
+                    item.save()
+            
+            if item_errors:
+                return JsonResponse({
+                    'success': False,
+                    'error': '; '.join(item_errors)
+                })
+            
+            # Recalculate totals
+            order.total_cost = sum(
+                oi.item.cost_price * Decimal(str(oi.quantity))
+                for oi in order.customer_order_items.select_related('item')
+            )
+            
+            if order.total_revenue > 0:
+                order.net_profit = order.total_revenue - order.total_cost
+                order.profit_margin = (order.net_profit / order.total_revenue) * 100
+            
+            order.save()
+            
+            return JsonResponse({
+                'success': True,
+                'total_cost': str(order.total_cost),
+                'net_profit': str(order.net_profit) if order.net_profit else '0',
+                'profit_margin': str(order.profit_margin) if order.profit_margin else '0',
+            })
+
+        elif action == 'remove_item_ajax':
+            from .models import CustomerOrderItem
+            from .views import BUNDLE_REQUIREMENTS
+
+            item_id_to_remove = request.POST.get('item_id', '').strip()
+            if not item_id_to_remove:
+                return JsonResponse({'success': False, 'error': 'Item ID is required.'})
+
+            try:
+                order_item = order.customer_order_items.get(id=item_id_to_remove)
+                item_name = order_item.item.name
+                order_item.delete()
+
+                order.total_cost = sum(
+                    oi.item.cost_price * Decimal(str(oi.quantity))
+                    for oi in order.customer_order_items.select_related('item')
+                )
+                if order.total_revenue > 0:
+                    order.net_profit = order.total_revenue - order.total_cost
+                    order.profit_margin = (order.net_profit / order.total_revenue) * 100
+                order.save()
+
                 current_snacks = sum(
                     oi.quantity for oi in order.customer_order_items.select_related('item')
                     if oi.item.category == 'snack'
@@ -1736,66 +1963,22 @@ def admin_customer_order_detail(request, order_id):
                     oi.quantity for oi in order.customer_order_items.select_related('item')
                     if oi.item.category == 'juice'
                 )
-                
-                # Validate totals
-                errors = []
-                if required_snacks > 0 and current_snacks != required_snacks:
-                    errors.append(f'Total snacks must equal {required_snacks}. Current: {current_snacks}')
-                if required_juices > 0 and current_juices != required_juices:
-                    errors.append(f'Total juices must equal {required_juices}. Current: {current_juices}')
-                
-                if errors:
-                    for error in errors:
-                        messages.error(request, error)
-                    # Refresh order items for display
-                    order_items = order.customer_order_items.select_related('item')
-                    target_margin = Decimal(request.session.get('admin_margin_target', '38'))
-                    suggested_price = None
-                    if order.bundle_type == 'custom' and order.total_cost > 0:
-                        margin_factor = Decimal(str(1 - float(target_margin) / 100))
-                        if margin_factor > 0:
-                            suggested_price = int(order.total_cost / margin_factor / 100) * 100 + 100
-                    suggested_profit = None
-                    suggested_margin = None
-                    if suggested_price and order.total_cost > 0:
-                        suggested_profit = Decimal(str(suggested_price)) - order.total_cost
-                        if suggested_price > 0:
-                            suggested_margin = (suggested_profit / Decimal(str(suggested_price))) * 100
-                    
-                    # Get bundle requirements for validation display
-                    bundle_requirements = None
-                    if order.bundle_type != 'custom' and order.bundle_type in BUNDLE_REQUIREMENTS:
-                        bundle_requirements = BUNDLE_REQUIREMENTS[order.bundle_type]
-                    
-                    context = {
-                        'order': order,
-                        'order_items': order_items,
-                        'suggested_price': suggested_price,
-                        'suggested_profit': suggested_profit,
-                        'suggested_margin': suggested_margin,
-                        'target_margin': target_margin,
-                        'bundle_requirements': bundle_requirements,
-                    }
-                    return render(request, 'admin/customer_order_detail.html', context)
-            
-            # Recalculate totals
-            order.total_cost = sum(
-                item.item.cost_price * Decimal(str(item.quantity))
-                for item in order.customer_order_items.select_related('item')
-            )
-            
-            # If revenue is already set, recalculate margin and warn if below 38%
-            if order.total_revenue > 0:
-                order.net_profit = order.total_revenue - order.total_cost
-                if order.total_revenue > 0:
-                    order.profit_margin = (order.net_profit / order.total_revenue) * 100
-                    if order.profit_margin < 38:
-                        min_price = order.total_cost / Decimal('0.62')
-                        messages.warning(request, f'Current revenue results in {order.profit_margin:.1f}% margin. Minimum price for 38% margin is ${min_price:.0f} JMD.')
-            
-            order.save()
-            messages.success(request, 'Item quantities updated.')
-        
+
+                return JsonResponse({
+                    'success': True,
+                    'removed_order_item_id': int(item_id_to_remove),
+                    'item_name': item_name,
+                    'total_cost': str(order.total_cost),
+                    'net_profit': str(order.net_profit) if order.net_profit else '0',
+                    'profit_margin': str(order.profit_margin) if order.profit_margin else '0',
+                    'current_snacks': current_snacks,
+                    'current_juices': current_juices,
+                })
+            except CustomerOrderItem.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Item not found in this order.'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
+
         elif action == 'add_items':
             from .views import BUNDLE_REQUIREMENTS
             from .models import Item, CustomerOrderItem
