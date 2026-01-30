@@ -1,8 +1,8 @@
 [{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "org.rixsoft.jem.twa",
-        "sha256_cert_fingerprints": ["E2:43:A6:C5:AF:9C:B8:B2:94:CF:FE:B1:9F:39:44:C2:C5:2E:14:A0:4B:AD:F8:58:EF:1A:CB:F0:08:F5:79:6C"]
-      }
-    }]
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "org.rixsoft.jem.twa",
+    "sha256_cert_fingerprints": ["98:31:71:40:F4:FB:F6:2E:E0:DB:AD:C5:34:67:77:13:50:D9:1E:D6:36:5F:DB:F7:C6:B4:04:15:40:17:14:07"]
+  }
+}]

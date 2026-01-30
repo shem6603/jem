@@ -1034,7 +1034,7 @@ def admin_add_item(request):
             errors.append('Please select a valid category.')
         
         # Validate cost_per_bag
-        cost_valid, cost_decimal, cost_error = validate_decimal(
+        cost_valid, cost_per_bag_decimal, cost_error = validate_decimal(
             cost_per_bag,
             min_value=Decimal('0.01'),
             allow_zero=False
@@ -1043,7 +1043,7 @@ def admin_add_item(request):
             errors.append(f'Cost per bag: {cost_error}')
         
         # Validate units_per_bag
-        units_valid, units_int, units_error = validate_integer(
+        units_valid, units_per_bag_int, units_error = validate_integer(
             units_per_bag,
             min_value=1,
             max_value=10000,
